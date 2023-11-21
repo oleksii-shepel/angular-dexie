@@ -46,7 +46,7 @@ export function makeCRCTable(){
 const crcTable = makeCRCTable();
 
 export function crc32(str: string) {
-  //var crcTable = crcTable | makeCRCTable();
+
   var crc = 0 ^ (-1);
 
   for (var i = 0; i < str.length; i++ ) {

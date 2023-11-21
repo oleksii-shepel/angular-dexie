@@ -309,7 +309,7 @@ export class ObjectState {
     }
   }
 
-  // A function to convert a nested object to a left child right sibling tree
+
   async initialize(obj: any): Promise<void> {
     try {
       return await this.db.transaction('rw', this.db.stateNodes, async () => {
@@ -320,20 +320,20 @@ export class ObjectState {
         const rootNode = await this.createNode('root', undefined, undefined);
         const root = rootNode?.id;
 
-        // Loop through the keys of the object
+
         let queue = [];
         queue.push({obj: obj, parent: root});
 
         while(queue.length > 0) {
           let { obj, parent } = queue.shift() as {obj: any; parent: number | undefined};
           for (let key in obj) {
-            // Get the value of the key
+
             let value = obj[key];
             let record = await this.createNode(key, value, parent)!;
-            // Create a record object with the key as the property name and the parent id
-            // If the value is an object, get its left child id and right neighbour id
+
+
             if (typeof value === "object") {
-              // Get the keys of the value object
+
               queue.push({obj: value, parent: record!.id});
             }
           }
@@ -406,7 +406,7 @@ export class ObjectState {
             parent = nextChild;
           }
 
-          // Loop through the keys of the object
+
           let queue = [];
           queue.push({obj: obj, parent: parent?.id});
 
@@ -414,13 +414,13 @@ export class ObjectState {
             let { obj, parent } = queue.shift() as {obj: any; parent: number | undefined};
             if(typeof obj === 'object') {
               for (let key in obj) {
-                // Get the value of the key
+
                 let value = obj[key];
                 let record = await this.createNode(key, value, parent)!;
-                // Create a record object with the key as the property name and the parent id
-                // If the value is an object, get its left child id and right neighbour id
+
+
                 if (typeof value === "object" && record !== undefined) {
-                  // Get the keys of the value object
+
                   queue.push({obj: value, parent: record.id});
                 }
               }
