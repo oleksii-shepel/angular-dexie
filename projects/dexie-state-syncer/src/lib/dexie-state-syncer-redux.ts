@@ -346,26 +346,24 @@ function compose(...funcs: Function[]): Function {
 
 // src/applyMiddleware.ts
 function applyMiddleware(...middlewares: Function[]): Function {
-  return (createStore2: Function) => (reducer: Function, preloadedState: any) => {
-    const store = createStore2(reducer, preloadedState);
-    let dispatch = (): void => {
-      throw new Error("Dispatching while constructing your middleware is not allowed. Other middleware would not be applied to this dispatch.");
-    };
+  return (createStore: any) => (reducer: any, preloadedState: any) => {
+    const store = createStore(reducer, preloadedState)
+    let dispatch: (action: any, ...extraArgs: any[]) => any = () => {
+      throw new Error(
+        'Dispatching while constructing your middleware is not allowed. ' +
+          'Other middleware would not be applied to this dispatch.'
+      )
+    }
 
-    const middlewareAPI = (dispatch: any) => ({
-      getState: store.getState,
+    const middlewareAPI = {
+      getState: store.getState.bind(store),
       dispatch: (action: any, ...args: any[]) => dispatch(action, ...args)
-    });
-
-    const chain = middlewares.map((middleware) => middleware(middlewareAPI));
-
-    dispatch = compose(...chain)(store.dispatch);
-
-    return {
-      ...store,
-      dispatch
-    };
-  };
+    }
+    const chain = middlewares.map(middleware => middleware(middlewareAPI))
+    dispatch = compose(...chain)(store.dispatch)
+    store.dispatch = dispatch.bind(store);
+    return store;
+  }
 }
 
 export {
