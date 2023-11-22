@@ -1,4 +1,5 @@
 import { Observable, Observer, Subscription } from "rxjs";
+import { Semaphore } from './dexie-state-syncer-semaphore';
 
 // src/types/actions.ts
 function isAction(action: any): boolean {
@@ -360,8 +361,7 @@ function applyMiddleware(...middlewares: Function[]): Function {
       dispatch: (action: any, ...args: any[]) => dispatch(action, ...args)
     }
     const chain = middlewares.map(middleware => middleware(middlewareAPI))
-    dispatch = compose(...chain)(store.dispatch)
-    store.dispatch = dispatch.bind(store);
+    store.dispatch = compose(...chain)(store.dispatch.bind(store));
     return store;
   }
 }
