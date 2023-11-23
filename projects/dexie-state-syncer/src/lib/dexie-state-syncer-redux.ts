@@ -362,7 +362,7 @@ export class Middleware {
 function composeMiddleware(...middlewares: Middleware[]): (next: any) => (action: any) => any {
   return (next: any) => {
     const dispatch = (action: any) => {
-      let currentIndex = middlewares.length - 1;
+      let currentIndex = middlewares.length;
       const nextMiddleware = () => {
         currentIndex--;
         if (currentIndex >= 0) {

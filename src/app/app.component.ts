@@ -13,18 +13,18 @@ function counterReducer(state = { value: 0 }, action: any) {
 }
 
 export class LoggerMiddleware extends Middleware {
-  override handle(action: any, next: (action: any) => void) {
+  override async handle(action: any, next: (action: any) => void) {
     console.log('Dispatching:', action);
-    const result = next(action);
+    const result = await next(action);
     console.log('Next state:', this.getState());
     return result;
   }
 };
 
 export class ThunkMiddleware extends Middleware {
-  override handle(action: any, next: (action: any) => void) {
+  override async handle(action: any, next: (action: any) => void) {
     if (typeof action === 'function') {
-      return action(this.dispatch, this.getState);
+      return await action(this.dispatch, this.getState);
     }
     return next(action);
   }
@@ -65,18 +65,18 @@ export class AppComponent implements OnInit {
     // {value: 2}
     store.dispatch({ type: 'counter/decremented' })
     // {value: 1}
-    // store.dispatch(async() => {
-    //   store.dispatch({type: 'thunk/dispatched'});
-    //   let counter = 0;
-    //   let interval = setInterval(() => {
-    //     let timeout = setInterval(() => {
-    //       store.dispatch({type: 'thunk/dispatched2'});
-    //       if(counter % 100 === 0) clearInterval(timeout);
-    //       counter++;
-    //     }, 100);
-    //     if(counter === 1000) { clearInterval(interval);}
-    //   }, 500);
-    // })
+    store.dispatch(async() => {
+      store.dispatch({type: 'thunk/dispatched'});
+      let counter = 0;
+      let interval = setInterval(() => {
+        let timeout = setInterval(() => {
+          store.dispatch({type: 'thunk/dispatched2'});
+          if(counter % 100 === 0) clearInterval(timeout);
+          counter++;
+        }, 100);
+        if(counter === 1000) { clearInterval(interval);}
+      }, 500);
+    })
   }
 
   ngOnInit() {

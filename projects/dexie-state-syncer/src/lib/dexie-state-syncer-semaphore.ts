@@ -46,7 +46,7 @@ export class Semaphore {
     try {
       const req = request.fnToCall(...request.args);
 
-      if (typeof req.then === 'undefined') {
+      if (typeof req?.then !== 'function') {
         throw new Error('Function passed to callFunction() must return a Promise');
       }
 
