@@ -359,19 +359,27 @@ export class Middleware {
   }
 }
 
-function composeMiddleware(...middlewares: Middleware[]): (next: any) => (action: any) => any {
+function composeMiddleware(...middlewares: Middleware[]): (next: any) => (action: any) => Promise<any> {
   return (next: any) => {
-    const dispatch = (action: any) => {
+    const dispatch = async (action: any) => {
       let currentIndex = middlewares.length;
-      const nextMiddleware = () => {
-        currentIndex--;
-        if (currentIndex >= 0) {
-          middlewares[currentIndex].handle(action, nextMiddleware);
-        } else {
-          next(action);
-        }
+      let result = action;
+      let semaphore = new Semaphore(1);
+
+      const nextMiddleware = async () => {
+        currentIndex--; let promise = new Promise((resolve) => {
+          semaphore.callFunction(async () => {
+            if (currentIndex >= 0) {
+              result = middlewares[currentIndex].handle(action, nextMiddleware);
+            } else {
+              result = next(action);
+            }
+            resolve(result);
+          });
+        });
+        return promise;
       };
-      nextMiddleware();
+      return await nextMiddleware();
     };
     return dispatch;
   };

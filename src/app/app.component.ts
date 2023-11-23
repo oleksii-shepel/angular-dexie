@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { Middleware, applyMiddleware, createStore } from 'dexie-state-syncer'
+import { Semaphore } from 'projects/dexie-state-syncer/src/lib/dexie-state-syncer-semaphore';
 
 function counterReducer(state = { value: 0 }, action: any) {
   switch (action.type) {
@@ -13,11 +14,14 @@ function counterReducer(state = { value: 0 }, action: any) {
 }
 
 export class LoggerMiddleware extends Middleware {
+  semaphore = new Semaphore(1);
   override async handle(action: any, next: (action: any) => void) {
-    console.log('Dispatching:', action);
-    const result = await next(action);
-    console.log('Next state:', this.getState());
-    return result;
+    return this.semaphore.callFunction(async () => {
+      console.log('Dispatching:', action);
+      const result = await next(action);
+      console.log('Next state:', this.getState());
+      return result;
+    });
   }
 };
 
@@ -26,7 +30,7 @@ export class ThunkMiddleware extends Middleware {
     if (typeof action === 'function') {
       return await action(this.dispatch, this.getState);
     }
-    return next(action);
+    return await next(action);
   }
 };
 
@@ -44,7 +48,7 @@ export class AppComponent implements OnInit {
 // Create the middleware chain
 
 
-    let store = createStore(counterReducer, applyMiddleware(
+    let store = createStore(counterReducer,{ value: 0 }, applyMiddleware(
       new ThunkMiddleware((action, ...extraArgs) => store.dispatch(action, extraArgs), () => store.getState()),
       new LoggerMiddleware((action, ...extraArgs) => store.dispatch(action, extraArgs), () => store.getState()),
     ));
@@ -71,10 +75,10 @@ export class AppComponent implements OnInit {
       let interval = setInterval(() => {
         let timeout = setInterval(() => {
           store.dispatch({type: 'thunk/dispatched2'});
-          if(counter % 100 === 0) clearInterval(timeout);
+          if(counter % 2 === 0) clearInterval(timeout);
           counter++;
         }, 100);
-        if(counter === 1000) { clearInterval(interval);}
+        if(counter === 5) { clearInterval(interval);}
       }, 500);
     })
   }
