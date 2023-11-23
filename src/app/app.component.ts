@@ -47,7 +47,7 @@ export class AppComponent implements OnInit {
     let store = createStore(counterReducer, applyMiddleware(
       new ThunkMiddleware((action, ...extraArgs) => store.dispatch(action, extraArgs), () => store.getState()),
       new LoggerMiddleware((action, ...extraArgs) => store.dispatch(action, extraArgs), () => store.getState()),
-      ));
+    ));
 
 
     //chain.execute({type: 'chained/action'});
@@ -65,18 +65,18 @@ export class AppComponent implements OnInit {
     // {value: 2}
     store.dispatch({ type: 'counter/decremented' })
     // {value: 1}
-    store.dispatch(async() => {
-      store.dispatch({type: 'thunk/dispatched'});
-      let counter = 0;
-      let interval = setInterval(() => {
-        let timeout = setInterval(() => {
-          store.dispatch({type: 'thunk/dispatched2'});
-          if(counter % 100 === 0) clearInterval(timeout);
-          counter++;
-        }, 100);
-        if(counter === 1000) { clearInterval(interval);}
-      }, 500);
-    })
+    // store.dispatch(async() => {
+    //   store.dispatch({type: 'thunk/dispatched'});
+    //   let counter = 0;
+    //   let interval = setInterval(() => {
+    //     let timeout = setInterval(() => {
+    //       store.dispatch({type: 'thunk/dispatched2'});
+    //       if(counter % 100 === 0) clearInterval(timeout);
+    //       counter++;
+    //     }, 100);
+    //     if(counter === 1000) { clearInterval(interval);}
+    //   }, 500);
+    // })
   }
 
   ngOnInit() {
