@@ -345,25 +345,51 @@ function compose(...funcs: Function[]): Function {
   return funcs.reduce((a, b) => (...args: any[]) => a(b(...args)));
 }
 
-// src/applyMiddleware.ts
-function applyMiddleware(...middlewares: Function[]): Function {
-  return (createStore: any) => (reducer: any, preloadedState: any) => {
-    const store = createStore(reducer, preloadedState)
-    let dispatch: (action: any, ...extraArgs: any[]) => any = () => {
-      throw new Error(
-        'Dispatching while constructing your middleware is not allowed. ' +
-          'Other middleware would not be applied to this dispatch.'
-      )
-    }
+export class Middleware {
+  dispatch: (action: any, ...extraArgs: any[]) => any;
+  getState: () => any;
 
-    const middlewareAPI = {
-      getState: store.getState.bind(store),
-      dispatch: (action: any, ...args: any[]) => dispatch(action, ...args)
-    }
-    const chain = middlewares.map(middleware => middleware(middlewareAPI))
-    store.dispatch = compose(...chain)(store.dispatch.bind(store));
-    return store;
+  constructor(dispatch: (action: any, ...extraArgs: any[]) => any, getState: () => any) {
+    this.dispatch = dispatch;
+    this.getState = getState;
   }
+
+  handle(action: any, next: (action: any) => void): void {
+    return next(action);
+  }
+}
+
+function composeMiddleware(...middlewares: Middleware[]): (next: any) => (action: any) => any {
+  return (next: any) => {
+    const dispatch = (action: any) => {
+      let currentIndex = middlewares.length - 1;
+      const nextMiddleware = () => {
+        currentIndex--;
+        if (currentIndex >= 0) {
+          middlewares[currentIndex].handle(action, nextMiddleware);
+        } else {
+          next(action);
+        }
+      };
+      nextMiddleware();
+    };
+    return dispatch;
+  };
+}
+
+// src/applyMiddleware.ts
+function applyMiddleware(...middlewares: Middleware[]): Function {
+  return (createStore: any) => (reducer: any, preloadedState: any) => {
+    const store = createStore(reducer, preloadedState);
+
+    const chain = middlewares.map((middleware) => {
+      middleware.handle.bind(middleware);
+      return middleware;
+    });
+
+    store.dispatch = composeMiddleware(...chain)(store.dispatch.bind(store));
+    return store;
+  };
 }
 
 export {

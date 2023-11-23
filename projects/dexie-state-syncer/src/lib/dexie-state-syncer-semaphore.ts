@@ -5,7 +5,7 @@ interface Request {
   args: any[];
 }
 
-export default class Semaphore {
+export class Semaphore {
   private maxConcurrentRequests: number;
   private currentRequests: Request[];
   private runningRequests: number;
@@ -46,7 +46,7 @@ export default class Semaphore {
     try {
       const req = request.fnToCall(...request.args);
 
-      if (!(req instanceof Promise)) {
+      if (typeof req.then === 'undefined') {
         throw new Error('Function passed to callFunction() must return a Promise');
       }
 
