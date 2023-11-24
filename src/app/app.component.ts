@@ -16,6 +16,7 @@ function counterReducer(state = { value: 0 }, action: any) {
 export class LoggerMiddleware extends Middleware {
   semaphore = new Semaphore(1);
   override async handle(action: any, next: (action: any) => void) {
+    console.log('LoggerMiddleware.handle');
     return this.semaphore.callFunction(async () => {
       console.log('Dispatching:', action);
       const result = await next(action);
@@ -27,6 +28,7 @@ export class LoggerMiddleware extends Middleware {
 
 export class ThunkMiddleware extends Middleware {
   override async handle(action: any, next: (action: any) => void) {
+    console.log('ThunkMiddleware.handle');
     if (typeof action === 'function') {
       return await action(this.dispatch, this.getState);
     }
@@ -78,7 +80,7 @@ export class AppComponent implements OnInit {
           if(counter % 2 === 0) clearInterval(timeout);
           counter++;
         }, 100);
-        if(counter === 5) { clearInterval(interval);}
+        if(counter <= 5) { clearInterval(interval);}
       }, 500);
     })
   }

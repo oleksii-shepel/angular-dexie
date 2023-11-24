@@ -362,15 +362,15 @@ export class Middleware {
 function composeMiddleware(...middlewares: Middleware[]): (next: any) => (action: any) => Promise<any> {
   return (next: any) => {
     const dispatch = async (action: any) => {
-      let index = middlewares.length;
+      let currentIndex = middlewares.length;
       let result = action;
       let semaphore = new Semaphore(1);
 
-      const nextMiddleware = async (action: any) => {
-        index--; let promise = new Promise<any>((resolve) => {
+      const nextMiddleware = async (action: any): Promise<any> => {
+        currentIndex--; let promise = new Promise<any>((resolve) => {
           semaphore.callFunction(async () => {
-            if (index >= 0) {
-              result = middlewares[index].handle(action, nextMiddleware);
+            if (currentIndex >= 0) {
+              result = middlewares[currentIndex].handle(action, nextMiddleware);
             } else {
               result = next(action);
             }
