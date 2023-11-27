@@ -345,57 +345,65 @@ function compose(...funcs: Function[]): Function {
   return funcs.reduce((a, b) => (...args: any[]) => a(b(...args)));
 }
 
-export class Middleware {
-  dispatch: (action: any, ...extraArgs: any[]) => any;
-  getState: () => any;
+export interface Middleware {
+  (store: any): (next: (action: any) => any) => (action: any) => any | Promise<any>;
+}
 
-  constructor(dispatch: (action: any, ...extraArgs: any[]) => any, getState: () => any) {
-    this.dispatch = dispatch;
-    this.getState = getState;
+
+export class Lock {
+  private isLocked: boolean = false;
+  private queue: (() => void)[] = [];
+
+  constructor() {}
+
+  private async lock(): Promise<void> {
+    return new Promise((resolve) => {
+      if (this.isLocked) {
+        this.queue.push(resolve);
+      } else {
+        this.isLocked = true;
+        resolve();
+      }
+    });
   }
 
-  handle(action: any, next: (action: any) => void): void {
-    return next(action);
+  private unlock(): void {
+    if (this.queue.length > 0) {
+      const next = this.queue.shift();
+      if (next) {
+        next();
+      }
+    } else {
+      this.isLocked = false;
+    }
+  }
+
+  async handle(action: any, next: (store: any) => (action: any) => void) {
+    await this.lock();
+
+    try {
+      await next(action);
+    } finally {
+      this.unlock();
+    }
   }
 }
 
-function composeMiddleware(...middlewares: Middleware[]): (next: any) => (action: any) => Promise<any> {
-  return (next: any) => {
-    const dispatch = async (action: any) => {
-      let currentIndex = middlewares.length;
-      let result = action;
-      let semaphore = new Semaphore(1);
 
-      const nextMiddleware = async (action: any): Promise<any> => {
-        currentIndex--; let promise = new Promise<any>((resolve) => {
-          semaphore.callFunction(async () => {
-            if (currentIndex >= 0) {
-              result = middlewares[currentIndex].handle(action, nextMiddleware);
-            } else {
-              result = next(action);
-            }
-            resolve(result);
-          });
-        });
-        return promise;
-      };
-      return await nextMiddleware(action);
-    };
-    return dispatch;
-  };
-}
 
 // src/applyMiddleware.ts
-function applyMiddleware(...middlewares: Middleware[]): Function {
-  return (createStore: any) => (reducer: any, preloadedState: any) => {
+function applyMiddleware(...middlewares: Middleware[]) {
+  return (createStore: Function) => (reducer: Function, preloadedState: any) => {
     const store = createStore(reducer, preloadedState);
-
-    const chain = middlewares.map((middleware) => {
-      middleware.handle.bind(middleware);
-      return middleware;
-    });
-
-    store.dispatch = composeMiddleware(...chain)(store.dispatch.bind(store));
+    let dispatch = (action: any, ...args: any[]) => {
+      throw new Error("Dispatching while constructing your middleware is not allowed. Other middleware would not be applied to this dispatch.");
+    };
+    const middlewareAPI = {
+      getState: () => store.getState(),
+      dispatch: (action: any, ...args: any[]) => dispatch(action, ...args)
+    };
+    const chain = middlewares.map((middleware) => middleware(middlewareAPI));
+    store.dispatch = compose(...chain).bind(store)(store.dispatch.bind(store));
     return store;
   };
 }

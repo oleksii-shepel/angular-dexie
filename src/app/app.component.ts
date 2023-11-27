@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { Middleware, applyMiddleware, createStore } from 'dexie-state-syncer'
+import { Middleware, applyMiddleware, createStore, logger } from 'dexie-state-syncer'
 import { Semaphore } from 'projects/dexie-state-syncer/src/lib/dexie-state-syncer-semaphore';
 
 function counterReducer(state = { value: 0 }, action: any) {
@@ -13,28 +13,19 @@ function counterReducer(state = { value: 0 }, action: any) {
   }
 }
 
-export class LoggerMiddleware extends Middleware {
-  semaphore = new Semaphore(1);
-  override async handle(action: any, next: (action: any) => void) {
-    console.log('LoggerMiddleware.handle');
-    return this.semaphore.callFunction(async () => {
-      console.log('Dispatching:', action);
-      const result = await next(action);
-      console.log('Next state:', this.getState());
-      return result;
-    });
-  }
+export const loggerMiddleware: Middleware = (store: any) => (next: (action: any) => any) => async(action: any) => {
+  console.log('[Middleware] Received action:', action);
+  const result = await next(action);
+  console.log('[Middleware] Processed action:', result);
+  return result;
 };
 
-export class ThunkMiddleware extends Middleware {
-  override async handle(action: any, next: (action: any) => void) {
-    console.log('ThunkMiddleware.handle');
-    if (typeof action === 'function') {
-      return await action(this.dispatch, this.getState);
-    }
-    return await next(action);
+export const thunkMiddleware: Middleware = (store: any) => (next: (action: any) => any) => async(action: any) => {
+  if (typeof action === 'function') {
+    return await action(store);
   }
-};
+  return await next(action);
+}
 
 @Component({
   selector: 'app-root',
@@ -50,9 +41,9 @@ export class AppComponent implements OnInit {
 // Create the middleware chain
 
 
-    let store = createStore(counterReducer,{ value: 0 }, applyMiddleware(
-      new ThunkMiddleware((action, ...extraArgs) => store.dispatch(action, extraArgs), () => store.getState()),
-      new LoggerMiddleware((action, ...extraArgs) => store.dispatch(action, extraArgs), () => store.getState()),
+    let store = createStore(counterReducer, applyMiddleware(
+      thunkMiddleware,
+      loggerMiddleware,
     ));
 
 
