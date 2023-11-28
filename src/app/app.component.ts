@@ -13,16 +13,16 @@ function counterReducer(state = { value: 0 }, action: any) {
   }
 }
 
-export const loggerMiddleware: Middleware = (store: any) => (next: (action: any) => any) => async(action: any) => {
+export const loggerMiddleware: Middleware = ({dispatch, getState}: {dispatch: any; getState: any}) => (next: (action: any) => any) => async(action: any) => {
   console.log('[Middleware] Received action:', action);
   const result = await next(action);
   console.log('[Middleware] Processed action:', result);
   return result;
 };
 
-export const thunkMiddleware: Middleware = (store: any) => (next: (action: any) => any) => async(action: any) => {
+export const thunkMiddleware: Middleware = ({dispatch, getState}: {dispatch: any; getState: any}) => (next: (action: any) => any) => async(action: any) => {
   if (typeof action === 'function') {
-    return await action(store);
+    return await action(dispatch, getState);
   }
   return await next(action);
 }
