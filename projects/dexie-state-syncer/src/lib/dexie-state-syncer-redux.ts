@@ -118,113 +118,107 @@ function createStore(reducer: Function, preloadedState?: any, enhancer?: Functio
     return enhancer(createStore)(reducer, preloadedState);
   }
 
+  let currentReducer = reducer;
+  let currentState = preloadedState;
+  let observer: Observer<any> | undefined = undefined;
+  let isObserverInitialized = false;
+  let isDispatching = false;
+  let actionQueue: any = [];
 
-  class StoreObservable extends Observable<any> implements Observer<any> {
-    currentReducer: any;
-    currentState: any;
-    observer: Observer<any> | undefined;
-    isDispatching: boolean;
-    isObserverInitialized: boolean;
-    actionQueue: any[];
+  let state = new Observable((observer: Observer<any>) => {
+    observer = observer;
+    isObserverInitialized = true;
 
-    constructor(reducer: any, preloadedState: any) {
-      super((observer: Observer<any>) => {
-        this.observer = observer;
-        this.isObserverInitialized = true;
-
-        // Process queued actions
-        while (this.actionQueue.length > 0) {
-          const action = this.actionQueue.shift();
-          this.dispatch(action);
-        }
-      });
-
-      this.currentReducer = reducer;
-      this.currentState = preloadedState;
-      this.isObserverInitialized = false;
-      this.isDispatching = false;
-      this.actionQueue = [];
+    // Process queued actions
+    while (actionQueue.length > 0) {
+      const action = actionQueue.shift();
+      dispatch(action);
     }
+  });
 
-    getState(): any {
-      return this.currentState;
-    }
+  function getState(): any {
+    return currentState;
+  }
 
-    override subscribe(next?: any, error?: any, complete?: any): Subscription {
-      if (typeof next === 'function') {
-        return super.subscribe(next, error, complete);
-      } else {
-        return super.subscribe(next as Partial<Observer<any>>);
-      }
-    }
-
-    dispatch(action: any): any {
-      if (!isPlainObject(action)) {
-        throw new Error(`Actions must be plain objects. Instead, the actual type was: '${kindOf(action)}'. You may need to add middleware to your store setup to handle dispatching other values, such as 'redux-thunk' to handle dispatching functions. See https://redux.js.org/tutorials/fundamentals/part-4-store#middleware and https://redux.js.org/tutorials/fundamentals/part-6-async-logic#using-the-redux-thunk-middleware for examples.`);
-      }
-      if (typeof action.type === "undefined") {
-        throw new Error('Actions may not have an undefined "type" property. You may have misspelled an action type string constant.');
-      }
-      if (typeof action.type !== "string") {
-        throw new Error(`Action "type" property must be a string. Instead, the actual type was: '${kindOf(action.type)}'. Value was: '${action.type}' (stringified)`);
-      }
-      if (this.isDispatching) {
-        throw new Error("Reducers may not dispatch actions.");
-      }
-      if (this.isObserverInitialized) {
-        this.processAction(action);
-      } else {
-        this.actionQueue.push(action);
-      }
-      return action;
-    }
-
-    processAction(action: any): void {
-      try {
-        this.isDispatching = true;
-        this.currentState = this.currentReducer(this.currentState, action);
-        this.next(this.currentState);
-      } finally {
-        this.isDispatching = false;
-      }
-    }
-
-    replaceReducer(nextReducer: Function): void {
-      if (typeof nextReducer !== "function") {
-        throw new Error(`Expected the nextReducer to be a function. Instead, received: '${kindOf(nextReducer)}`);
-      }
-      this.currentReducer = nextReducer;
-      this.dispatch({
-        type: actionTypes_default.REPLACE
-      });
-    }
-
-    next(value: any): void {
-      if (this.observer) {
-        this.observer.next(value);
-      }
-    }
-
-    error(err: any): void {
-      if (this.observer) {
-        this.observer.error(err);
-      }
-    }
-
-    complete(): void {
-      if (this.observer) {
-        this.observer.complete();
-      }
+  function subscribe(next?: any, error?: any, complete?: any): Subscription {
+    if (typeof next === 'function') {
+      return state.subscribe(next, error, complete);
+    } else {
+      return state.subscribe(next as Partial<Observer<any>>);
     }
   }
 
-  let store = new StoreObservable(reducer, preloadedState);
+  function dispatch(action: any): any {
+    if (!isPlainObject(action)) {
+      throw new Error(`Actions must be plain objects. Instead, the actual type was: '${kindOf(action)}'. You may need to add middleware to your store setup to handle dispatching other values, such as 'redux-thunk' to handle dispatching functions. See https://redux.js.org/tutorials/fundamentals/part-4-store#middleware and https://redux.js.org/tutorials/fundamentals/part-6-async-logic#using-the-redux-thunk-middleware for examples.`);
+    }
+    if (typeof action.type === "undefined") {
+      throw new Error('Actions may not have an undefined "type" property. You may have misspelled an action type string constant.');
+    }
+    if (typeof action.type !== "string") {
+      throw new Error(`Action "type" property must be a string. Instead, the actual type was: '${kindOf(action.type)}'. Value was: '${action.type}' (stringified)`);
+    }
+    if (isDispatching) {
+      throw new Error("Reducers may not dispatch actions.");
+    }
+    if (isObserverInitialized) {
+      processAction(action);
+    } else {
+      actionQueue.push(action);
+    }
+    return action;
+  }
 
-  store.dispatch({
+  function processAction(action: any): void {
+    try {
+      isDispatching = true;
+      currentState = currentReducer(currentState, action);
+      next(currentState);
+    } finally {
+      isDispatching = false;
+    }
+  }
+
+  function replaceReducer(nextReducer: Function): void {
+    if (typeof nextReducer !== "function") {
+      throw new Error(`Expected the nextReducer to be a function. Instead, received: '${kindOf(nextReducer)}`);
+    }
+    currentReducer = nextReducer;
+    dispatch({
+      type: actionTypes_default.REPLACE
+    });
+  }
+
+  function next(value: any): void {
+    if (observer) {
+      observer.next(value);
+    }
+  }
+
+  function error(err: any): void {
+    if (observer) {
+      observer.error(err);
+    }
+  }
+
+  function complete(): void {
+    if (observer) {
+      observer.complete();
+    }
+  }
+
+
+  dispatch({
     type: actionTypes_default.INIT
   });
 
-  return store;
+  return {
+    dispatch,
+    subscribe,
+    getState,
+    replaceReducer,
+    state
+  }
 }
 
 // src/combineReducers.ts
@@ -361,9 +355,12 @@ function applyMiddleware(...middlewares: Middleware[]) {
       dispatch: (action: any, ...args: any[]) => dispatch(action, ...args)
     };
     const chain = middlewares.map((middleware) => middleware(middlewareAPI));
-    store.dispatch = compose(...chain).bind(store)(store.dispatch.bind(store));
-    return store;
-  };
+    dispatch = compose(...chain).bind(store)(store.dispatch.bind(store));
+    return {
+      ...store,
+      dispatch
+    };
+  }
 }
 
 export {
