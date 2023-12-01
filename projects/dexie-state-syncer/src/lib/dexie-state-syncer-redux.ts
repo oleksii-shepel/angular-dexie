@@ -1,5 +1,4 @@
-import { Observable, Observer, Subscription } from "rxjs";
-import { Semaphore } from './dexie-state-syncer-semaphore';
+import { BehaviorSubject, Observer, Subscription } from "rxjs";
 
 // src/types/actions.ts
 function isAction(action: any): boolean {
@@ -85,19 +84,9 @@ function isDate(val: any): boolean {
   return typeof val.toDateString === "function" && typeof val.getDate === "function" && typeof val.setDate === "function";
 }
 
-// src/types/middleware.ts
-export function createThunkMiddleware(extraArgument?: any) {
-  const middleware: Function = ({ dispatch, getState }: any) => (next: any) => (action: any) => {
-    if (typeof action === "function") {
-      return action(dispatch, getState, extraArgument);
-    }
-    return next(action);
-  };
-  return middleware;
-}
-
 // src/createStore.ts
 function createStore(reducer: Function, preloadedState?: any, enhancer?: Function): any {
+
   if (typeof reducer !== "function") {
     throw new Error(`Expected the root reducer to be a function. Instead, received: '${kindOf(reducer)}'`);
   }
@@ -119,32 +108,18 @@ function createStore(reducer: Function, preloadedState?: any, enhancer?: Functio
   }
 
   let currentReducer = reducer;
-  let currentState = preloadedState;
-  let observer: Observer<any> | undefined = undefined;
-  let isObserverInitialized = false;
+  let currentState = new BehaviorSubject<any>(preloadedState);
   let isDispatching = false;
-  let actionQueue: any = [];
-
-  let state = new Observable((observer: Observer<any>) => {
-    observer = observer;
-    isObserverInitialized = true;
-
-    // Process queued actions
-    while (actionQueue.length > 0) {
-      const action = actionQueue.shift();
-      dispatch(action);
-    }
-  });
 
   function getState(): any {
-    return currentState;
+    return currentState.value;
   }
 
   function subscribe(next?: any, error?: any, complete?: any): Subscription {
     if (typeof next === 'function') {
-      return state.subscribe(next, error, complete);
+      return currentState.subscribe({next, error, complete});
     } else {
-      return state.subscribe(next as Partial<Observer<any>>);
+      return currentState.subscribe(next as Partial<Observer<any>>);
     }
   }
 
@@ -161,19 +136,16 @@ function createStore(reducer: Function, preloadedState?: any, enhancer?: Functio
     if (isDispatching) {
       throw new Error("Reducers may not dispatch actions.");
     }
-    if (isObserverInitialized) {
-      processAction(action);
-    } else {
-      actionQueue.push(action);
-    }
+
+    processAction(action);
     return action;
   }
 
   function processAction(action: any): void {
     try {
       isDispatching = true;
-      currentState = currentReducer(currentState, action);
-      next(currentState);
+      const nextState = currentReducer(currentState.value, action);
+      currentState.next(nextState);
     } finally {
       isDispatching = false;
     }
@@ -189,25 +161,6 @@ function createStore(reducer: Function, preloadedState?: any, enhancer?: Functio
     });
   }
 
-  function next(value: any): void {
-    if (observer) {
-      observer.next(value);
-    }
-  }
-
-  function error(err: any): void {
-    if (observer) {
-      observer.error(err);
-    }
-  }
-
-  function complete(): void {
-    if (observer) {
-      observer.complete();
-    }
-  }
-
-
   dispatch({
     type: actionTypes_default.INIT
   });
@@ -216,8 +169,7 @@ function createStore(reducer: Function, preloadedState?: any, enhancer?: Functio
     dispatch,
     subscribe,
     getState,
-    replaceReducer,
-    state
+    replaceReducer
   }
 }
 
@@ -355,7 +307,7 @@ function applyMiddleware(...middlewares: Middleware[]) {
       dispatch: (action: any, ...args: any[]) => dispatch(action, ...args)
     };
     const chain = middlewares.map((middleware) => middleware(middlewareAPI));
-    dispatch = compose(...chain).bind(store)(store.dispatch.bind(store));
+    dispatch = compose(...chain)(store.dispatch);
     return {
       ...store,
       dispatch
