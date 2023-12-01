@@ -1,4 +1,5 @@
 import { BehaviorSubject, Observer, Subscription } from "rxjs";
+import { Semaphore } from "./dexie-state-syncer-semaphore";
 
 // src/types/actions.ts
 function isAction(action: any): boolean {
@@ -292,7 +293,38 @@ function compose(...funcs: Function[]): Function {
 }
 
 export interface Middleware {
-  (store: any): (next: (action: any) => any) => (action: any) => any | Promise<any>;
+  (store: any): (next: (action: any) => any) => Promise<(action: any) => any> | any;
+}
+
+function composeMiddleware(...funcs: Middleware[]): Function {
+  if (funcs.length === 0) {
+    return (next: any) => (action: any) => action;
+  }
+
+  const semaphores: Semaphore[] = funcs.map(() => new Semaphore(1));
+
+  const reducer = (a: Middleware, b: Middleware, index: number) => {
+    return (next: any) => async (action: any) => {
+      const semaphore = semaphores[index];
+      const result = await a(await semaphore.callFunction(async () => {
+        return await b(next);
+      }))(action);
+      return result;
+    };
+  };
+
+  const composed = funcs.reduce(reducer);
+
+  const semaphore = new Semaphore(1);
+  semaphores.push(semaphore);
+
+  return (next: any) => {
+    return (action: any) => {
+      return semaphore.callFunction(async () => {
+        return await composed(next)(action);
+      });
+    };
+  };
 }
 
 // src/applyMiddleware.ts
@@ -307,7 +339,7 @@ function applyMiddleware(...middlewares: Middleware[]) {
       dispatch: (action: any, ...args: any[]) => dispatch(action, ...args)
     };
     const chain = middlewares.map((middleware) => middleware(middlewareAPI));
-    dispatch = compose(...chain)(store.dispatch);
+    dispatch = composeMiddleware(...chain)(store.dispatch);
     return {
       ...store,
       dispatch

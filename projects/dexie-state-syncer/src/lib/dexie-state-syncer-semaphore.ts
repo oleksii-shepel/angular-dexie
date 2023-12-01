@@ -44,9 +44,9 @@ export class Semaphore {
     this.runningRequests++;
 
     try {
-      const req = request.fnToCall(...request.args);
+      const req = request.fnToCall(...request.args) as any;
 
-      if (typeof req?.then !== 'function') {
+      if (!(req instanceof Promise) || !(req?.then instanceof Function)) {
         throw new Error('Function passed to callFunction() must return a Promise');
       }
 
