@@ -312,8 +312,8 @@ function composeMiddleware(...funcs: Middleware[]): Function {
   const semaphore = new Semaphore(1);
 
   return (next: any) => {
-    return (action: any) => {
-      return semaphore.callFunction(async () => {
+    return async (action: any) => {
+      return await semaphore.callFunction(async () => {
         return await composed(next)(action);
       });
     };

@@ -42,8 +42,8 @@ export class AppComponent implements OnInit {
 
 
     let store = createStore(counterReducer, applyMiddleware(
-      thunkMiddleware,
-      loggerMiddleware,
+      //thunkMiddleware,
+      //loggerMiddleware,
     ));
 
 
