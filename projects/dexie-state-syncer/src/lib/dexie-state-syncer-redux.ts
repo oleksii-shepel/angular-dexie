@@ -30,7 +30,7 @@ const ActionTypes = {
 const actionTypes_default = ActionTypes;
 
 // src/utils/kindOf.ts
-export function kindOf(val: any): string {
+function kindOf(val: any): string {
   if (val === undefined)
     return "undefined";
   if (val === null)
@@ -303,6 +303,7 @@ function applyMiddleware(...middlewares: Middleware[]) {
 
 export {
   actionTypes_default as __DO_NOT_USE__ActionTypes,
+  kindOf,
   applyMiddleware,
   combineReducers,
   compose,
