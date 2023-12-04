@@ -1,5 +1,3 @@
-import { isDevMode } from '@angular/core';
-
 export type AnyFn = (...args: any[]) => any;
 
 export interface SelectorFunction {
@@ -24,80 +22,71 @@ export interface MemoizedProjectorFunction extends MemoizedFunction, ProjectorFu
 }
 
 export interface MemoizedSelector extends MemoizedFunction {
-  (props: any | any[], projectorProps?: any): (state: any) => any;
+  (props: any | any[], projectorProps?: any): Promise<(state: any) => any> | any;
   release: () => any;
 }
 
 
+const defaultMemoize: AnyFn = (fn: AnyFn): MemoizedFunction => {
+  let lastArgs: any[] | null = null;
+  let lastResult: any | null = null;
+  let called = false;
 
-export function makeCRCTable(){
-  var c;
-  var crcTable = [];
-  for(var n =0; n < 256; n++){
-      c = n;
-      for(var k =0; k < 8; k++){
-          c = ((c&1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1));
-      }
-      crcTable[n] = c;
-  }
-  return crcTable;
-}
-
-const crcTable = makeCRCTable();
-
-export function crc32(str: string) {
-
-  var crc = 0 ^ (-1);
-
-  for (var i = 0; i < str.length; i++ ) {
-      crc = (crc >>> 8) ^ crcTable[(crc ^ str.charCodeAt(i)) & 0xFF];
-  }
-
-  return (crc ^ (-1)) >>> 0;
-}
-
-export function flattenObject(obj: any) {
-  var toReturn = {} as any;
-
-  for (var i in obj) {
-      if (!obj.hasOwnProperty(i)) continue;
-
-      if ((typeof obj[i]) == 'object') {
-          var flatObject = flattenObject(obj[i]);
-          for (var x in flatObject) {
-              if (!flatObject.hasOwnProperty(x)) continue;
-
-              toReturn[i + '.' + x] = flatObject[x];
-          }
-      } else {
-          toReturn[i] = obj[i];
-      }
-  }
-  return toReturn;
-}
-
-export function memoize(fn: AnyFn) {
-  let cache = {} as any;
-  let memoized = ((...args: any[]) => {
-    let obj = flattenObject(args)
-    let n = crc32(JSON.stringify(obj, Object.keys(obj).sort()));
-    if (n in cache) {
-      console.log('Fetching from cache', n);
-      return cache[n];
+  const resultFunc: MemoizedFunction = (...args: any[]): any => {
+    if (called && lastArgs !== null && args.every((arg, index) => arg === lastArgs![index])) {
+      return lastResult;
     }
-    else {
-      console.log('Calculating result', args);
-      let result = fn(...args);
-      cache[n] = result;
-      return result;
+    lastResult = fn(...args);
+    lastArgs = args;
+    called = true;
+    return lastResult;
+  };
+
+  resultFunc.release = () => {
+    lastArgs = null;
+    lastResult = null;
+    called = false;
+  };
+
+  return resultFunc;
+};
+
+function asyncMemoize(fn: AnyFn): MemoizedFunction {
+  const cache = new Map<string, any>();
+  const pendingResults = new Map<string, Promise<any>>();
+
+  const memoizedFn: MemoizedFunction = async (...args: any[]) => {
+    const key = JSON.stringify(args);
+    if (cache.has(key)) {
+      return cache.get(key);
     }
-  }) as MemoizedFunction;
 
-  memoized.release = () => {
-    cache = {} as any;
-  }
+    if (pendingResults.has(key)) {
+      return pendingResults.get(key);
+    }
 
-  return memoized;
+    const promise = fn(...args).then(
+      (result: any) => {
+        cache.set(key, result);
+        pendingResults.delete(key);
+        return result;
+      },
+      (error: any)  => {
+        pendingResults.delete(key);
+        throw error;
+      }
+    );
+
+    pendingResults.set(key, promise);
+    return promise;
+  };
+
+  memoizedFn.release = () => {
+    cache.clear();
+    pendingResults.clear();
+  };
+
+  return memoizedFn;
 }
 
 export function memoizeStub(fn: AnyFn) {
@@ -106,36 +95,27 @@ export function memoizeStub(fn: AnyFn) {
   return func;
 }
 
-export function createSelector(selectors: SelectorFunction | SelectorFunction[], projector: ProjectorFunction, options: {memoizeSelectors? : AnyFn, memoizeProjector?: AnyFn} = {}) {
-  const memoizeSelectors = options.memoizeSelectors ?? memoize;
-  const memoizeProjector = options.memoizeProjector ?? memoize;
+export function createSelector(
+  selectors: SelectorFunction | SelectorFunction[],
+  projector: ProjectorFunction,
+  options: { memoizeSelectors?: AnyFn; memoizeProjector?: AnyFn } = {}
+): MemoizedSelector {
+  const { memoizeSelectors = asyncMemoize, memoizeProjector = defaultMemoize } = options;
 
-  if (!Array.isArray(selectors)) selectors = [selectors];
-  const memoizedSelectors = selectors.map(selector => memoizeSelectors!(selector)) as MemoizedSelectorFunction[];
-  const memoizedProjector = memoizeProjector!(projector) as MemoizedProjectorFunction;
+  const selectorArray: SelectorFunction[] = Array.isArray(selectors) ? selectors : [selectors];
+  const memoizedSelectors: MemoizedFunction[] = selectorArray.map(selector => memoizeSelectors(selector));
+  const memoizedProjector: MemoizedFunction = memoizeProjector(projector);
 
-  const selector = ((props: any | any[], projectorProps?: any) => (state: any) => {
-    if (!Array.isArray(props)) props = [props];
-    let args = memoizedSelectors.map((selector, index) => selector(state, props[index]));
-    return memoizedProjector(...args, projectorProps);
-  }) as MemoizedSelector;
+  const memoizedSelector: MemoizedSelector = async (state: any, props?: any) => {
+    const selectorResults: any[] = await Promise.all(memoizedSelectors.map(selector => selector(state, props)));
+    return memoizedProjector(...selectorResults, props);
+  };
 
-  selector.release = () => {
+  memoizedSelector.release = () => {
     memoizedSelectors.forEach(selector => selector.release());
     memoizedProjector.release();
-  }
+  };
 
-  return selector;
-}
-
-export function createFeatureSelector (
-  featureName: string,
-): MemoizedSelector {
- return createSelector((state: any) => {
-      const featureState = state[featureName];
-      return featureState;
-    },
-    (featureState: any) => featureState
-  );
+  return memoizedSelector;
 }
 
