@@ -301,22 +301,15 @@ function composeMiddleware(...funcs: Middleware[]): Function {
     return (next: any) => (action: any) => action;
   }
 
-  const semaphores: Semaphore[] = funcs.map(() => new Semaphore(1));
-
-  const reducer = (a: Middleware, b: Middleware, index: number) => {
+  const reducer = (a: Middleware, b: Middleware) => {
     return (next: any) => async (action: any) => {
-      const semaphore = semaphores[index];
-      const result = await a(await semaphore.callFunction(async () => {
-        return await b(next);
-      }))(action);
-      return result;
+      return await a(await b(next))(action);
     };
   };
 
-  const composed = funcs.reduce(reducer);
+  const composed = funcs.length === 1? funcs[0] : funcs.reduce(reducer);
 
   const semaphore = new Semaphore(1);
-  semaphores.push(semaphore);
 
   return (next: any) => {
     return (action: any) => {
