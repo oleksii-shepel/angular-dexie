@@ -9,7 +9,8 @@ export * from './lib/dexie-state-syncer-reducer';
 export * from './lib/dexie-state-syncer-models';
 export * from './lib/dexie-state-syncer-db';
 export * from './lib/dexie-state-syncer-in-memory-db';
-export * from './lib/dexie-state-syncer-selector';
+export * from './lib/dexie-state-syncer-selectors';
+export * from './lib/dexie-state-syncer-actions';
 export * from './lib/dexie-state-syncer-redux';
 export * from './lib/dexie-state-syncer-lock';
 
