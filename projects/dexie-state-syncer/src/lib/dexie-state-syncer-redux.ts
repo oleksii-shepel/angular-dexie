@@ -240,6 +240,35 @@ function combineReducers(reducers: any): Function {
   };
 }
 
+interface Action<T = any> {
+  type: string;
+  payload?: T;
+  error?: boolean;
+  meta?: any;
+}
+
+type SyncFunction<T> = (...args: any[]) => (dispatch: Function, getState?: Function) => T;
+type AsyncFunction<T> = (...args: any[]) => (dispatch: Function, getState?: Function) => Promise<T>;
+
+function createAction<T>(type: string, fn: SyncFunction<T> | AsyncFunction<T>) {
+  return (...args: any[]) => {
+    const operation = fn(...args);
+    return (dispatch: Function, getState?: Function) => {
+      const result = operation(dispatch, getState);
+      if (result instanceof Promise) {
+        // Handle asynchronous operation
+        return result.then(
+          (data) => dispatch({ type: `${type}_SUCCESS`, payload: data }),
+          (error) => dispatch({ type: `${type}_FAILURE`, payload: error, error: true })
+        );
+      } else {
+        // Handle synchronous operation
+        return dispatch({ type, payload: result });
+      }
+    };
+  };
+}
+
 // src/bindActionCreators.ts
 function bindActionCreator(actionCreator: Function, dispatch: Function): Function {
   return function(this: any, ...args: any[]): any {
