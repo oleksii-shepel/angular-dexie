@@ -1,4 +1,4 @@
-import { BehaviorSubject, Observer, Subscription, exhaustMap, firstValueFrom } from "rxjs";
+import { BehaviorSubject, Observer, Subscription, exhaustMap, firstValueFrom, map } from "rxjs";
 import { Semaphore } from "./dexie-state-syncer-semaphore";
 import { MemoizedSelector } from "./dexie-state-syncer-selectors";
 
@@ -164,7 +164,13 @@ function createStore(reducer: Function, preloadedState?: any, enhancer?: Functio
   }
 
   function select(selector: MemoizedSelector): Promise<any> {
-    return firstValueFrom(currentState.pipe(exhaustMap(selector)));
+    const selectorObservable = currentState.pipe(
+      selector instanceof Promise || (selector as any)?.then instanceof Function
+        ? exhaustMap(selector)
+        : map(selector)
+    );
+
+    return firstValueFrom(selectorObservable);
   }
 
   dispatch({
