@@ -153,11 +153,6 @@ export function createSelector(
     memoizedProjector.release();
   };
 
-  memoizedSelector.release = () => {
-    memoizedSelectors.forEach(selector => selector.release());
-    memoizedProjector.release();
-  };
-
   return memoizedSelector;
 }
 
