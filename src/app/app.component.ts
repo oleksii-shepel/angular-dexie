@@ -50,7 +50,7 @@ export class AppComponent implements OnInit {
       (state: any) => state,
     );
 
-    store.select(selector).subscribe((value: any) => console.log(value));
+    store.subscribe((value: any) => store.select(selector).then(console.log));
 
 
     //chain.execute({type: 'chained/action'});
