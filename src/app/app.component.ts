@@ -37,7 +37,7 @@ export class AppComponent implements OnInit {
     // Create a Redux store holding the state of your app.
     // Its API is { subscribe, dispatch, getState }.
 
-// Create the middleware chain
+    // Create the middleware chain
 
 
     let store = createStore(counterReducer, applyMiddleware(
@@ -45,7 +45,12 @@ export class AppComponent implements OnInit {
       loggerMiddleware,
     ));
 
-    console.log(store.select((state: any) =>state, (state: any) =>state).subscribe((value: any) => console.log(value)));
+    let selector = createSelector(
+      (state: any) => state,
+      (state: any) => state,
+    );
+
+    store.select(selector).subscribe((value: any) => console.log(value));
 
 
     //chain.execute({type: 'chained/action'});
@@ -53,13 +58,6 @@ export class AppComponent implements OnInit {
     // Normally you'd use a view binding library (e.g. React Redux) rather than subscribe() directly.
     // There may be additional use cases where it's helpful to subscribe as well.
 
-    //store.subscribe(() => console.log(store.getState()))
-    let selector = createSelector(
-      (state: any) => state.counter.value,
-      (state: any) => state.counter.value,
-    );
-
-    //store.pipe(selector()).subscribe((value: any) => console.log(value));
 
     // The only way to mutate the internal state is to dispatch an action.
     // The actions can be serialized, logged or stored and later replayed.

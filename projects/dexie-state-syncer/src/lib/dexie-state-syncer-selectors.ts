@@ -68,43 +68,37 @@ const defaultMemoize: AnyFn = (fn: AnyFn): MemoizedFunction => {
 };
 
 function asyncMemoize(fn: AnyFn): MemoizedFunction {
-  const cache = new Map<string, any>();
-  const pendingResults = new Map<string, Promise<any>>();
-  const memoizedFn: MemoizedFunction = async (...args: any[]) => {
+  const cache = new Map<string, Promise<any>>();
+
+  const memoizedFn: MemoizedFunction = (...args: any[]) => {
     const key = args.join(':');
+
     if (cache.has(key)) {
       return cache.get(key);
     }
-    if (pendingResults.has(key)) {
-      return pendingResults.get(key);
-    }
+
     const promise = new Promise<any>((resolve, reject) => {
       const timeout = setTimeout(() => {
         reject(new Error('Function execution timed out'));
       }, 5000); // Timeout after 5 seconds
 
-      fn(...args).then(
-        (result: any) => {
-          clearTimeout(timeout);
-          cache.set(key, result);
-          pendingResults.delete(key);
-          resolve(result);
-        },
-        (error: any) => {
-          clearTimeout(timeout);
-          pendingResults.delete(key);
-          reject(error);
-        }
-      );
+      try {
+        const result = fn(...args);
+        clearTimeout(timeout);
+        cache.set(key, Promise.resolve(result));
+        resolve(result);
+      } catch (error) {
+        clearTimeout(timeout);
+        reject(error);
+      }
     });
 
-    pendingResults.set(key, promise);
+    cache.set(key, promise);
     return promise;
   };
 
   memoizedFn.release = () => {
     cache.clear();
-    pendingResults.clear();
   };
 
   return memoizedFn;
@@ -135,7 +129,8 @@ export function createSelector(
 
   const memoizedSelector: MemoizedSelector = async (state: any, props?: any) => {
     const selectorPromises = memoizedSelectors.map(selector => selector(state, props));
-    const selectorResults = await Promise.allSettled(selectorPromises);
+    let selectorResults = await Promise.allSettled(selectorPromises) as any;
+    selectorResults = selectorResults.map(({status, value}: any) => value);
     return memoizedProjector(...selectorResults, props);
   };
 

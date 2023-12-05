@@ -1,4 +1,4 @@
-import { BehaviorSubject, Observable, Observer, Subscription } from "rxjs";
+import { BehaviorSubject, Observable, Observer, Subscription, exhaustMap } from "rxjs";
 import { Semaphore } from "./dexie-state-syncer-semaphore";
 import { MemoizedSelector } from "./dexie-state-syncer-selectors";
 
@@ -164,7 +164,7 @@ function createStore(reducer: Function, preloadedState?: any, enhancer?: Functio
   }
 
   function select(selector: MemoizedSelector): Observable<any> {
-    return currentState.pipe(selector);
+    return currentState.pipe(exhaustMap(selector));
   }
 
   dispatch({
