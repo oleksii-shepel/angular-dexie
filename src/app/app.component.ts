@@ -1,6 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { Middleware, applyMiddleware, createStore, logger } from 'dexie-state-syncer'
-import { Semaphore } from 'projects/dexie-state-syncer/src/lib/dexie-state-syncer-semaphore';
+import { Middleware, applyMiddleware, createSelector, createStore } from 'dexie-state-syncer'
 
 function counterReducer(state = { value: 0 }, action: any) {
   switch (action.type) {
@@ -46,13 +45,21 @@ export class AppComponent implements OnInit {
       loggerMiddleware,
     ));
 
+    console.log(store.select((state: any) =>state, (state: any) =>state).subscribe((value: any) => console.log(value)));
+
 
     //chain.execute({type: 'chained/action'});
     // You can use subscribe() to update the UI in response to state changes.
     // Normally you'd use a view binding library (e.g. React Redux) rather than subscribe() directly.
     // There may be additional use cases where it's helpful to subscribe as well.
 
-    store.subscribe(() => console.log(store.getState()))
+    //store.subscribe(() => console.log(store.getState()))
+    let selector = createSelector(
+      (state: any) => state.counter.value,
+      (state: any) => state.counter.value,
+    );
+
+    //store.pipe(selector()).subscribe((value: any) => console.log(value));
 
     // The only way to mutate the internal state is to dispatch an action.
     // The actions can be serialized, logged or stored and later replayed.

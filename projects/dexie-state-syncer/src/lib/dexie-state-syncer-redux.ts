@@ -1,5 +1,6 @@
-import { BehaviorSubject, Observer, Subscription } from "rxjs";
+import { BehaviorSubject, Observable, Observer, Subscription } from "rxjs";
 import { Semaphore } from "./dexie-state-syncer-semaphore";
+import { MemoizedSelector } from "./dexie-state-syncer-selectors";
 
 // src/types/actions.ts
 function isAction(action: any): boolean {
@@ -162,6 +163,10 @@ function createStore(reducer: Function, preloadedState?: any, enhancer?: Functio
     });
   }
 
+  function select(selector: MemoizedSelector): Observable<any> {
+    return currentState.pipe(selector);
+  }
+
   dispatch({
     type: actionTypes_default.INIT
   });
@@ -170,7 +175,8 @@ function createStore(reducer: Function, preloadedState?: any, enhancer?: Functio
     dispatch,
     subscribe,
     getState,
-    replaceReducer
+    replaceReducer,
+    select
   }
 }
 

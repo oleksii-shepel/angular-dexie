@@ -28,23 +28,39 @@ export interface MemoizedSelector extends MemoizedFunction {
 
 
 const defaultMemoize: AnyFn = (fn: AnyFn): MemoizedFunction => {
-  let lastArgs: any[] | null = null;
-  let lastResult: any | null = null;
+  let lastArgs: any[] | undefined = undefined;
+  let lastResult: any | undefined = undefined;
   let called = false;
 
-  const resultFunc: MemoizedFunction = (...args: any[]): any => {
-    if (called && lastArgs !== null && args.every((arg, index) => arg === lastArgs![index])) {
-      return lastResult;
+  const resultFunc: MemoizedFunction = async (...args: any[]): Promise<any> => {
+    if (called && lastArgs !== undefined && args.length === lastArgs.length) {
+      let argsEqual = true;
+      for (let i = 0; i < args.length; i++) {
+        if (args[i] !== lastArgs[i]) {
+          argsEqual = false;
+          break;
+        }
+      }
+      if (argsEqual) {
+        return lastResult;
+      }
     }
-    lastResult = fn(...args);
-    lastArgs = args;
-    called = true;
-    return lastResult;
+
+    try {
+      const result = await fn(...args);
+      lastResult = result;
+      lastArgs = args;
+      called = true;
+      return result;
+    } catch (error) {
+      // Handle error here
+      throw error;
+    }
   };
 
   resultFunc.release = () => {
-    lastArgs = null;
-    lastResult = null;
+    lastArgs = undefined;
+    lastResult = undefined;
     called = false;
   };
 
@@ -54,28 +70,33 @@ const defaultMemoize: AnyFn = (fn: AnyFn): MemoizedFunction => {
 function asyncMemoize(fn: AnyFn): MemoizedFunction {
   const cache = new Map<string, any>();
   const pendingResults = new Map<string, Promise<any>>();
-
   const memoizedFn: MemoizedFunction = async (...args: any[]) => {
-    const key = JSON.stringify(args);
+    const key = args.join(':');
     if (cache.has(key)) {
       return cache.get(key);
     }
-
     if (pendingResults.has(key)) {
       return pendingResults.get(key);
     }
+    const promise = new Promise<any>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Function execution timed out'));
+      }, 5000); // Timeout after 5 seconds
 
-    const promise = fn(...args).then(
-      (result: any) => {
-        cache.set(key, result);
-        pendingResults.delete(key);
-        return result;
-      },
-      (error: any)  => {
-        pendingResults.delete(key);
-        throw error;
-      }
-    );
+      fn(...args).then(
+        (result: any) => {
+          clearTimeout(timeout);
+          cache.set(key, result);
+          pendingResults.delete(key);
+          resolve(result);
+        },
+        (error: any) => {
+          clearTimeout(timeout);
+          pendingResults.delete(key);
+          reject(error);
+        }
+      );
+    });
 
     pendingResults.set(key, promise);
     return promise;
@@ -102,12 +123,19 @@ export function createSelector(
 ): MemoizedSelector {
   const { memoizeSelectors = asyncMemoize, memoizeProjector = defaultMemoize } = options;
 
-  const selectorArray: SelectorFunction[] = Array.isArray(selectors) ? selectors : [selectors];
-  const memoizedSelectors: MemoizedFunction[] = selectorArray.map(selector => memoizeSelectors(selector));
+  const isSelectorArray = Array.isArray(selectors);
+  const selectorArray: SelectorFunction[] = isSelectorArray ? selectors : [selectors];
+
+  const memoizedSelectors: MemoizedFunction[] = [];
+  for (const selector of selectorArray) {
+    memoizedSelectors.push(memoizeSelectors(selector));
+  }
+
   const memoizedProjector: MemoizedFunction = memoizeProjector(projector);
 
   const memoizedSelector: MemoizedSelector = async (state: any, props?: any) => {
-    const selectorResults: any[] = await Promise.all(memoizedSelectors.map(selector => selector(state, props)));
+    const selectorPromises = memoizedSelectors.map(selector => selector(state, props));
+    const selectorResults = await Promise.allSettled(selectorPromises);
     return memoizedProjector(...selectorResults, props);
   };
 
