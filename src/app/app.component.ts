@@ -1,30 +1,6 @@
-import { Component, OnInit } from '@angular/core';
-import { Middleware, applyMiddleware, createSelector, createStore } from 'dexie-state-syncer'
+import { Component, Inject, OnInit } from '@angular/core';
+import { Middleware, Store, applyMiddleware, createSelector, createStore } from 'dexie-state-syncer'
 
-function counterReducer(state = { value: 0 }, action: any) {
-  switch (action.type) {
-    case 'counter/incremented':
-      return { value: state.value + 1 }
-    case 'counter/decremented':
-      return { value: state.value - 1 }
-    default:
-      return state
-  }
-}
-
-export const loggerMiddleware: Middleware = ({dispatch, getState}: {dispatch: any; getState: any}) => (next: (action: any) => any) => async(action: any) => {
-  console.log('[Middleware] Received action:', action);
-  const result = await next(action);
-  console.log('[Middleware] Processed action:', result);
-  return result;
-};
-
-export const thunkMiddleware: Middleware = ({dispatch, getState}: {dispatch: any; getState: any}) => (next: (action: any) => any) => async(action: any) => {
-  if (typeof action === 'function') {
-    return await action(dispatch, getState);
-  }
-  return await next(action);
-}
 
 @Component({
   selector: 'app-root',
@@ -33,17 +9,11 @@ export const thunkMiddleware: Middleware = ({dispatch, getState}: {dispatch: any
 })
 export class AppComponent implements OnInit {
   title = 'dexie-ngrx-store';
-  constructor() {
+  constructor(@Inject('Store') private store: Store<any>) {
     // Create a Redux store holding the state of your app.
     // Its API is { subscribe, dispatch, getState }.
 
     // Create the middleware chain
-
-
-    let store = createStore(counterReducer, applyMiddleware(
-      thunkMiddleware,
-      loggerMiddleware,
-    ));
 
     let selector = createSelector(
       (state: any) => state,

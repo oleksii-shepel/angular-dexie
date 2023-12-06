@@ -1,6 +1,7 @@
 import { BehaviorSubject, Observer, Subscription, exhaustMap, firstValueFrom, map } from "rxjs";
 import { Semaphore } from "./dexie-state-syncer-semaphore";
 import { MemoizedSelector } from "./dexie-state-syncer-selectors";
+import { Action, AsyncAction } from "./dexie-state-syncer-actions";
 
 // src/types/actions.ts
 function isAction(action: any): boolean {
@@ -86,8 +87,16 @@ function isDate(val: any): boolean {
   return typeof val.toDateString === "function" && typeof val.getDate === "function" && typeof val.setDate === "function";
 }
 
+export interface Store<K> {
+  dispatch: (action: Action<any> | AsyncAction<any>) => any;
+  subscribe: (next?: any, error?: any, complete?: any) => Subscription;
+  getState: () => K;
+  replaceReducer: (newReducer: (state: any, action: Action) => any) => void;
+  select: (selector: MemoizedSelector) => Promise<any>;
+}
+
 // src/createStore.ts
-function createStore(reducer: Function, preloadedState?: any, enhancer?: Function): any {
+function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhancer?: Function): Store<K> {
 
   if (typeof reducer !== "function") {
     throw new Error(`Expected the root reducer to be a function. Instead, received: '${kindOf(reducer)}'`);
@@ -110,10 +119,10 @@ function createStore(reducer: Function, preloadedState?: any, enhancer?: Functio
   }
 
   let currentReducer = reducer;
-  let currentState = new BehaviorSubject<any>(preloadedState);
+  let currentState = new BehaviorSubject<K>(preloadedState ?? {} as K);
   let isDispatching = false;
 
-  function getState(): any {
+  function getState(): K {
     return currentState.value;
   }
 
@@ -125,8 +134,8 @@ function createStore(reducer: Function, preloadedState?: any, enhancer?: Functio
     }
   }
 
-  function dispatch(action: any): any {
-    if (!isPlainObject(action)) {
+  function dispatch(action: Action<any> | AsyncAction<any>): any {
+    if (!isPlainObject(action) || action instanceof Function) {
       throw new Error(`Actions must be plain objects. Instead, the actual type was: '${kindOf(action)}'. You may need to add middleware to your store setup to handle dispatching other values, such as 'redux-thunk' to handle dispatching functions. See https://redux.js.org/tutorials/fundamentals/part-4-store#middleware and https://redux.js.org/tutorials/fundamentals/part-6-async-logic#using-the-redux-thunk-middleware for examples.`);
     }
     if (typeof action.type === "undefined") {
@@ -163,14 +172,14 @@ function createStore(reducer: Function, preloadedState?: any, enhancer?: Functio
     });
   }
 
-  function select(selector: MemoizedSelector): Promise<any> {
+  function select(selector: MemoizedSelector): Promise<K> {
     const selectorObservable = currentState.pipe(
       selector instanceof Promise || (selector as any)?.then instanceof Function
         ? exhaustMap(selector)
         : map(selector)
     );
 
-    return firstValueFrom(selectorObservable);
+    return firstValueFrom<K>(selectorObservable);
   }
 
   dispatch({

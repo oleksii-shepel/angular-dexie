@@ -7,6 +7,11 @@ export interface Action<T = any> {
   meta?: any;
 }
 
+export interface AsyncAction<T = any> {
+  (): Promise<T>;
+}
+
+
 export type SyncFunction<T> = (dispatch: Function, getState?: Function) => T;
 export type AsyncFunction<T> = (dispatch: Function, getState?: Function) => Promise<T>;
 
