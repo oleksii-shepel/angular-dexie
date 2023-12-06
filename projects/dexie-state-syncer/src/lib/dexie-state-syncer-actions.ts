@@ -7,25 +7,22 @@ export interface Action<T = any> {
   meta?: any;
 }
 
-export type SyncFunction<T> = (...args: any[]) => (dispatch: Function, getState?: Function) => T;
-export type AsyncFunction<T> = (...args: any[]) => (dispatch: Function, getState?: Function) => Promise<T>;
+export type SyncFunction<T> = (dispatch: Function, getState?: Function) => T;
+export type AsyncFunction<T> = (dispatch: Function, getState?: Function) => Promise<T>;
 
 export function createAction<T>(type: string, fn: SyncFunction<T> | AsyncFunction<T>) {
-  return (...args: any[]) => {
-    const operation = fn(...args);
-    return (dispatch: Function, getState?: Function) => {
-      const result = operation(dispatch, getState);
-      if (result instanceof Promise) {
-        // Handle asynchronous operation
-        return result.then(
-          (data) => dispatch({ type: `${type}_SUCCESS`, payload: data }),
-          (error) => dispatch({ type: `${type}_FAILURE`, payload: error, error: true })
-        );
-      } else {
-        // Handle synchronous operation
-        return dispatch({ type, payload: result });
-      }
-    };
+  return (dispatch: Function, getState?: Function) => {
+    const result = fn(dispatch, getState);
+    if (result instanceof Promise && (result as any)?.then instanceof Function) {
+      // Handle asynchronous operation
+      return result.then(
+        (data) => dispatch({ type: `${type}_SUCCESS`, payload: data }),
+        (error) => dispatch({ type: `${type}_FAILURE`, payload: error, error: true })
+      );
+    } else {
+      // Handle synchronous operation
+      return dispatch({ type, payload: result });
+    }
   };
 }
 
