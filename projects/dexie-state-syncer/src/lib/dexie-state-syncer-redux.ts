@@ -91,7 +91,7 @@ export interface Store<K> {
   dispatch: (action: Action<any> | AsyncAction<any>) => any;
   getState: () => K;
   replaceReducer: (newReducer: (state: any, action: Action) => any) => void;
-  select: (selector: MemoizedSelector) => Promise<any>;
+  select: (selector: (state: any) => Promise<(state: any) => any> | any) => Promise<any>;
   pipe: (...operators: Array<UnaryFunction<Observable<K>, Observable<any>>>) => Observable<any>;
   subscribe: (next?: any, error?: any, complete?: any) => Subscription;
 }

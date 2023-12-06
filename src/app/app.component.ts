@@ -1,5 +1,5 @@
 import { Component, Inject, OnInit } from '@angular/core';
-import { Middleware, Store, applyMiddleware, createSelector, createStore } from 'dexie-state-syncer'
+import { Middleware, Store, applyMiddleware, createSelector, createStore, select } from 'dexie-state-syncer'
 
 
 @Component({
@@ -20,7 +20,8 @@ export class AppComponent implements OnInit {
       (state: any) => state,
     );
 
-    store.pipe().subscribe((value: any) => store.select(selector).then(console.log));
+    //store.pipe(select(selector)).subscribe((value: any) => console.log(value));
+    store.subscribe((value: any) => store.select(selector).then(console.log));
 
 
     //chain.execute({type: 'chained/action'});
