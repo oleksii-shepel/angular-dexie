@@ -1,3 +1,5 @@
+import { Observable, OperatorFunction, exhaustMap, map } from "rxjs";
+
 export type AnyFn = (...args: any[]) => any;
 
 export interface SelectorFunction {
@@ -156,3 +158,12 @@ export function createSelector(
   return memoizedSelector;
 }
 
+export function select<T, K>(selector: (state: T) => K | Promise<K>): OperatorFunction<T, K> {
+  return (source: Observable<T>): Observable<K> => {
+    return source.pipe(
+      (selector instanceof Promise && (selector as any)?.then instanceof Function)
+        ? exhaustMap(state => Promise.resolve(selector(state)).then(value => value))
+        : map(state => selector(state) as K)
+      );
+  };
+}

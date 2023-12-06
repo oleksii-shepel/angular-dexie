@@ -1,4 +1,4 @@
-import { BehaviorSubject, Observer, Subscription, exhaustMap, firstValueFrom, map } from "rxjs";
+import { BehaviorSubject, Observable, Observer, Subscription, UnaryFunction, exhaustMap, firstValueFrom, map } from "rxjs";
 import { Semaphore } from "./dexie-state-syncer-semaphore";
 import { MemoizedSelector } from "./dexie-state-syncer-selectors";
 import { Action, AsyncAction } from "./dexie-state-syncer-actions";
@@ -89,10 +89,11 @@ function isDate(val: any): boolean {
 
 export interface Store<K> {
   dispatch: (action: Action<any> | AsyncAction<any>) => any;
-  subscribe: (next?: any, error?: any, complete?: any) => Subscription;
   getState: () => K;
   replaceReducer: (newReducer: (state: any, action: Action) => any) => void;
   select: (selector: MemoizedSelector) => Promise<any>;
+  pipe: (...operators: Array<UnaryFunction<Observable<K>, Observable<any>>>) => Observable<any>;
+  subscribe: (next?: any, error?: any, complete?: any) => Subscription;
 }
 
 // src/createStore.ts
@@ -172,14 +173,18 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
     });
   }
 
-  function select(selector: MemoizedSelector): Promise<K> {
+  function pipe(...operators: Array<UnaryFunction<Observable<K>, Observable<any>>>): Observable<any> {
+    return operators.reduce((source, operator) => operator(source), currentState as Observable<K>);
+  }
+
+  function select(selector: (state: any) => Promise<(state: any) => any> | any): Promise<any> {
     const selectorObservable = currentState.pipe(
       selector instanceof Promise || (selector as any)?.then instanceof Function
         ? exhaustMap(selector)
         : map(selector)
     );
 
-    return firstValueFrom<K>(selectorObservable);
+    return firstValueFrom(selectorObservable);
   }
 
   dispatch({
@@ -188,9 +193,10 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
 
   return {
     dispatch,
-    subscribe,
     getState,
     replaceReducer,
+    pipe,
+    subscribe,
     select
   }
 }
