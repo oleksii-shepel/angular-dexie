@@ -119,7 +119,7 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
   }
 
   let currentReducer = reducer;
-  let currentState = new BehaviorSubject<K>(preloadedState ?? {} as K);
+  let currentState = new BehaviorSubject<K>(preloadedState as K);
   let isDispatching = false;
 
   function getState(): K {
