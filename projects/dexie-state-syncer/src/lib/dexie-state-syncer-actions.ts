@@ -19,19 +19,16 @@ export function createAction<T>(type: string, fn: SyncFunction<T> | AsyncFunctio
   return (dispatch: Function, getState?: Function) => {
     const result = fn(dispatch, getState);
     if (result instanceof Promise && (result as any)?.then instanceof Function) {
-      // Handle asynchronous operation
       return result.then(
         (data) => dispatch({ type: `${type}_SUCCESS`, payload: data }),
         (error) => dispatch({ type: `${type}_FAILURE`, payload: error, error: true })
       );
     } else {
-      // Handle synchronous operation
       return dispatch({ type, payload: result });
     }
   };
 }
 
-// src/bindActionCreators.ts
 export function bindActionCreator(actionCreator: Function, dispatch: Function): Function {
   return function(this: any, ...args: any[]): any {
     return dispatch(actionCreator.apply(this, args));

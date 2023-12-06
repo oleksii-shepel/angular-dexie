@@ -1,9 +1,7 @@
 import { BehaviorSubject, Observable, Observer, Subscription, UnaryFunction, exhaustMap, firstValueFrom, map } from "rxjs";
 import { Semaphore } from "./dexie-state-syncer-semaphore";
-import { MemoizedSelector } from "./dexie-state-syncer-selectors";
 import { Action, AsyncAction } from "./dexie-state-syncer-actions";
 
-// src/types/actions.ts
 function isAction(action: any): boolean {
   return isPlainObject(action) && "type" in action && typeof action.type === "string";
 }
@@ -31,7 +29,6 @@ const ActionTypes = {
 
 const actionTypes_default = ActionTypes;
 
-// src/utils/kindOf.ts
 function kindOf(val: any): string {
   if (val === undefined)
     return "undefined";
@@ -96,7 +93,6 @@ export interface Store<K> {
   subscribe: (next?: any, error?: any, complete?: any) => Subscription;
 }
 
-// src/createStore.ts
 function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhancer?: Function): Store<K> {
 
   if (typeof reducer !== "function") {
@@ -201,7 +197,6 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
   }
 }
 
-// src/combineReducers.ts
 function assertReducerShape(reducers: any): void {
   const reducerKeys = Object.keys(reducers);
 
@@ -267,7 +262,6 @@ function combineReducers(reducers: any): Function {
   };
 }
 
-// src/compose.ts
 function compose(...funcs: Function[]): Function {
   if (funcs.length === 0) {
     return (arg: any): any => arg;
@@ -308,7 +302,6 @@ function composeMiddleware(...funcs: Middleware[]): Function {
   };
 }
 
-// src/applyMiddleware.ts
 function applyMiddleware(...middlewares: Middleware[]) {
   return (createStore: Function) => (reducer: Function, preloadedState: any) => {
     const store = createStore(reducer, preloadedState);
