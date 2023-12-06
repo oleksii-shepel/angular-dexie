@@ -18,7 +18,6 @@ function isPlainObject(obj: any): boolean {
   return Object.getPrototypeOf(obj) === proto;
 }
 
-// src/utils/actionTypes.ts
 const randomString = (): string => Math.random().toString(36).substring(7).split("").join(".");
 
 const ActionTypes = {
@@ -145,6 +144,7 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
       throw new Error("Reducers may not dispatch actions.");
     }
 
+    // queueScheduler.schedule(() => processAction(action));
     processAction(action);
     return action;
   }

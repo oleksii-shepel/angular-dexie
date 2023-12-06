@@ -64,10 +64,10 @@ export class ObjectState {
   root: number | undefined;
   autoincrement: number;
 
-  constructor(descriptor?: StateDescriptor) {
+  constructor() {
     this.db = new StateObjectDatabase();
-    this.root = descriptor?.root;
-    this.autoincrement = descriptor?.autoincrement ?? 0;
+    this.root = undefined;
+    this.autoincrement = 0;
   }
 
   descriptor(): StateDescriptor {
