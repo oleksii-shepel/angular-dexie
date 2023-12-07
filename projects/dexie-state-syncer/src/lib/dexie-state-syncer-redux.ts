@@ -1,6 +1,7 @@
 import { BehaviorSubject, Observable, Observer, Subscription, UnaryFunction, exhaustMap, firstValueFrom, map } from "rxjs";
 import { Semaphore } from "./dexie-state-syncer-semaphore";
 import { Action, AsyncAction } from "./dexie-state-syncer-actions";
+import { AnyFn } from "./dexie-state-syncer-selectors";
 
 function isAction(action: any): boolean {
   return isPlainObject(action) && "type" in action && typeof action.type === "string";
@@ -83,13 +84,15 @@ function isDate(val: any): boolean {
   return typeof val.toDateString === "function" && typeof val.getDate === "function" && typeof val.setDate === "function";
 }
 
+export type Reducer<T> = (state: T | undefined, action: Action<any>) => T | undefined
+
+
 export interface Store<K> {
   dispatch: (action: Action<any> | AsyncAction<any>) => any;
   getState: () => K;
-  replaceReducer: (newReducer: (state: any, action: Action) => any) => void;
-  select: (selector: (state: any) => Promise<(state: any) => any> | any) => Promise<any>;
+  replaceReducer: (newReducer: Reducer<any>) => void;
   pipe: (...operators: Array<UnaryFunction<Observable<K>, Observable<any>>>) => Observable<any>;
-  subscribe: (next?: any, error?: any, complete?: any) => Subscription;
+  subscribe: (next?: AnyFn | Observer<any>, error?: AnyFn, complete?: AnyFn) => Subscription;
 }
 
 function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhancer?: Function): Store<K> {
@@ -122,7 +125,7 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
     return currentState.value;
   }
 
-  function subscribe(next?: any, error?: any, complete?: any): Subscription {
+  function subscribe(next?: AnyFn | Observer<any>, error?: AnyFn, complete?: AnyFn): Subscription {
     if (typeof next === 'function') {
       return currentState.subscribe({next, error, complete});
     } else {
@@ -173,16 +176,6 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
     return operators.reduce((source, operator) => operator(source), currentState as Observable<K>);
   }
 
-  function select(selector: (state: any) => Promise<(state: any) => any> | any): Promise<any> {
-    const selectorObservable = currentState.pipe(
-      selector instanceof Promise || (selector as any)?.then instanceof Function
-        ? exhaustMap(selector)
-        : map(selector)
-    );
-
-    return firstValueFrom(selectorObservable);
-  }
-
   dispatch({
     type: actionTypes_default.INIT
   });
@@ -192,8 +185,7 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
     getState,
     replaceReducer,
     pipe,
-    subscribe,
-    select
+    subscribe
   }
 }
 

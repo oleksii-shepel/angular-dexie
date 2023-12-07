@@ -144,9 +144,9 @@ export function createSelector(
         const selectorResults = await Promise.all(memoizedSelectors.map(selector => selector(state, props)));
         return memoizedProjector(...selectorResults, props);
       }
-    : (state: any, props?: any) => {
+    : async (state: any, props?: any) => {
         // Handle synchronous selectors
-        const selectorResults = memoizedSelectors.map(selector => selector(state, props));
+        const selectorResults = await Promise.resolve(memoizedSelectors.map(selector => selector(state, props)));
         return memoizedProjector(...selectorResults, props);
       };
 

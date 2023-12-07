@@ -21,7 +21,7 @@ export class AppComponent implements OnInit {
     );
 
     //store.pipe(select(selector)).subscribe((value: any) => console.log(value));
-    store.subscribe((value: any) => store.select(selector).then(console.log));
+    store.subscribe(async(value: any) => selector(value).then(console.log));
 
 
     //chain.execute({type: 'chained/action'});
