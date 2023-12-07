@@ -77,36 +77,3 @@ export class Semaphore {
     }
   }
 }
-
-function semaphore<T>(concurrency: number): OperatorFunction<T, T> {
-  let count = 0;
-
-  return (source: Observable<T>): Observable<T> =>
-    new Observable<T>(subscriber => {
-      const subscribeNext = () => {
-        count++;
-        const subscription = source.subscribe({
-          next(value) {
-            subscriber.next(value);
-          },
-          error(err) {
-            subscriber.error(err);
-          },
-          complete() {
-            count--;
-            if (count === 0) {
-              subscriber.complete();
-            } else {
-              subscribeNext();
-            }
-          },
-        });
-
-        subscriber.add(subscription);
-      };
-
-      for (let i = 0; i < concurrency; i++) {
-        subscribeNext();
-      }
-    });
-}

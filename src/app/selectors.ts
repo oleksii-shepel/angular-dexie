@@ -1,5 +1,5 @@
 
-import { AnyFn, MemoizedFunction, StateDescriptor, createSelector, memoizeStub } from 'dexie-state-syncer';
+import { AnyFn, MemoizedFunction, StateDescriptor, createSelector, nomemoize } from 'dexie-state-syncer';
 
 export function treeMemoize(fn: AnyFn) {
   let cache = {} as any;
@@ -25,4 +25,4 @@ export function treeMemoize(fn: AnyFn) {
   return memoized;
 }
 
-export const selectTree = createSelector(async (state: any, props: any) => state && state.data().get(props), (state) => state, {memoizeSelectors: treeMemoize, memoizeProjector: memoizeStub});
+export const selectTree = createSelector(async (state: any, props: any) => state && state.data().get(props), (state) => state, {memoizeSelectors: treeMemoize, memoizeProjector: nomemoize});
