@@ -59,7 +59,16 @@ export class InMemoryObjectState {
   }
 
   descriptor(): StateDescriptor {
-    return { autoincrement: this.autoincrement, root: this.root, date: Date.now(), data: () => this };
+    return { autoincrement: this.autoincrement, root: this.root, date: Date.now(),
+      reader: {
+        get: (path) => this.get(Array.isArray(path) ? path.join('.') : path),
+        find: (path) => this.find(Array.isArray(path) ? path.join('.') : path)
+      },
+      writer: {
+        initialize: (obj) => this.initialize(obj),
+        update: (path, value) => this.update(Array.isArray(path) ? path.join('.') : path, value),
+      }
+    };
   }
 
   rootId(): number | undefined {
@@ -298,7 +307,7 @@ export class InMemoryObjectState {
   }
 
 
-  async initialize(obj: any): Promise<void> {
+  async initialize(obj: any): Promise<StateNode | undefined> {
     try {
       return await this.db.transaction('rw', this.db.stateNodes, async () => {
         this.root = undefined;
@@ -307,7 +316,6 @@ export class InMemoryObjectState {
 
         const rootNode = await this.createNode('root', undefined, undefined);
         const root = rootNode?.id;
-
 
         let queue = [];
         queue.push({obj: obj, parent: root});
@@ -319,13 +327,14 @@ export class InMemoryObjectState {
             let value = obj[key];
             let record = await this.createNode(key, value, parent)!;
 
-
             if (typeof value === "object") {
-
               queue.push({obj: value, parent: record!.id});
             }
           }
+
         }
+
+        return rootNode;
       });
     } catch (err) {
       return await Promise.reject(err);

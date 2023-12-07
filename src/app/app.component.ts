@@ -1,6 +1,9 @@
 import { Component, Inject, OnInit } from '@angular/core';
-import { Middleware, Store, applyMiddleware, createSelector, createStore, select } from 'dexie-state-syncer'
-
+import { Store, select } from 'dexie-state-syncer';
+import { initTree, updateTree } from 'dexie-state-syncer';
+import { tree } from './app.module';
+import { switchMap } from 'rxjs';
+import { selectTree } from './selectors';
 
 @Component({
   selector: 'app-root',
@@ -15,13 +18,13 @@ export class AppComponent implements OnInit {
 
     // Create the middleware chain
 
-    let selector = createSelector(
-      (state: any) => state,
-      (state: any) => state,
-    );
+    // let selector = createSelector(
+    //   (state: any) => state,
+    //   (state: any) => state,
+    // );
 
     //store.pipe(select(selector)).subscribe((value: any) => console.log(value));
-    store.subscribe(async(value: any) => selector(value).then(console.log));
+    //store.subscribe(async(value: any) => selector(value).then(console.log));
 
 
     //chain.execute({type: 'chained/action'});
@@ -32,36 +35,58 @@ export class AppComponent implements OnInit {
 
     // The only way to mutate the internal state is to dispatch an action.
     // The actions can be serialized, logged or stored and later replayed.
-    store.dispatch({ type: 'counter/incremented' })
+    //store.dispatch({ type: 'counter/incremented' })
     // {value: 1}
-    store.dispatch({ type: 'counter/incremented' })
+    //store.dispatch({ type: 'counter/incremented' })
     // {value: 2}
-    store.dispatch({ type: 'counter/decremented' })
+    //store.dispatch({ type: 'counter/decremented' })
     // {value: 1}
-    store.dispatch(async() => {
-      store.dispatch({type: 'thunk/dispatched'});
-      let counter = 0;
-      let interval = setInterval(() => {
-        let timeout = setInterval(() => {
-          store.dispatch({type: 'thunk/dispatched2'});
-          if(counter % 2 === 0) clearInterval(timeout);
-          counter++;
-        }, 100);
-        if(counter <= 5) { clearInterval(interval);}
-      }, 500);
-    })
+    // store.dispatch(async() => {
+    //   store.dispatch({type: 'thunk/dispatched'});
+    //   let counter = 0;
+    //   let interval = setInterval(() => {
+    //     let timeout = setInterval(() => {
+    //       store.dispatch({type: 'thunk/dispatched2'});
+    //       if(counter % 2 === 0) clearInterval(timeout);
+    //       counter++;
+    //     }, 100);
+    //     if(counter <= 5) { clearInterval(interval);}
+    //   }, 500);
+    // })
   }
 
   ngOnInit() {
-    // this.store.select(selectTree('')).pipe(concatMap(promise => from(promise))).subscribe((value) => {
-    //   console.log(value);
-    // });
 
-    // this.store.dispatch(initTree({init: true}));
+    this.store.pipe(select(selectTree(tree, ''))).subscribe((value) => {
+      console.log(value);
+    });
 
-    // let timeout = setTimeout(() => {
-    //   this.store.dispatch(updateTree({init: true}));
-    //   clearTimeout(timeout);
-    // }, 5000);
+    this.store.dispatch(initTree({
+      a: 'sdsd',
+      b: {
+        c: 'asd',
+        d: 'sadf',
+        e : {
+          f: 'dfasdasdasd',
+          g: 'gevrevre'
+        }
+      },
+      i: {
+        j: 'dsfsdf'
+      },
+      k: 'sadas'
+    }));
+
+     let timeout = setTimeout(() => {
+       this.store.dispatch(updateTree('b', {
+        c: 'asd',
+        d: 'sadf',
+        e : {
+          f: 'dfasdasdasd',
+          g: 'gevrevre'
+        }
+      }));
+      clearTimeout(timeout);
+    }, 5000);
   }
 }

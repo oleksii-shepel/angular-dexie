@@ -8,24 +8,26 @@ export interface Action<T = any> {
 }
 
 export interface AsyncAction<T = any> {
-  (): Promise<T>;
+  (...args: any[]): Promise<T>;
 }
 
+export type SyncFunction<T> = (...args: any[]) => (dispatch: Function, getState?: Function) => T;
+export type AsyncFunction<T> = (...args: any[]) => (dispatch: Function, getState?: Function) => Promise<T>;
 
-export type SyncFunction<T> = (dispatch: Function, getState?: Function) => T;
-export type AsyncFunction<T> = (dispatch: Function, getState?: Function) => Promise<T>;
-
-export function createAction<T>(type: string, fn: SyncFunction<T> | AsyncFunction<T>) {
-  return (dispatch: Function, getState?: Function) => {
-    const result = fn(dispatch, getState);
-    if (result instanceof Promise && (result as any)?.then instanceof Function) {
-      return result.then(
-        (data) => dispatch({ type: `${type}_SUCCESS`, payload: data }),
-        (error) => dispatch({ type: `${type}_FAILURE`, payload: error, error: true })
-      );
-    } else {
-      return dispatch({ type, payload: result });
-    }
+export function createAction<T, P extends any[]>(
+  type: string,
+  fn: (...args: P) => Promise<T> | T
+) {
+  return (...args: P) => {
+    return async (dispatch: Function, getState?: Function) => {
+      try {
+        const result = await Promise.resolve(fn(...args));
+        const actionResult = await (result as (...args: any[]) => any)(dispatch, getState);
+        dispatch({ type: `${type}_SUCCESS`, payload: actionResult });
+      } catch (error) {
+        dispatch({ type: `${type}_FAILURE`, payload: error, error: true });
+      }
+    };
   };
 }
 

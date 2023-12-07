@@ -1,8 +1,6 @@
-import { Action, ActionReducer, compose } from '@ngrx/store';
 import { ProfilePage, initialProfilePage } from './dexie-state-syncer-models';
-import { combineReducers } from '@ngrx/store';
-
-import { createAction, props } from '@ngrx/store';
+import { Action, ActionReducer, combineReducers } from '@ngrx/store';
+import { ObjectState, createAction } from 'dexie-state-syncer';
 
 export enum FormActions {
   UpdateForm = '@forms/form/update',
@@ -15,8 +13,15 @@ export enum FormActionsInternal {
   FormDestroyed = '@forms/form/destroyed',
 }
 
-export const initTree = createAction(FormActionsInternal.AutoInit, props<{ init: boolean }>());
-export const updateTree = createAction(FormActions.UpdateForm, props<{ init: boolean }>());
+export const initTree = createAction(FormActionsInternal.AutoInit, (obj: any) => async (dispatch: Function, getState?: Function) => {
+  const tree = getState!() as ObjectState;
+  return tree.descriptor().writer.initialize(obj);
+});
+
+export const updateTree = createAction(FormActions.UpdateForm, (path: string, obj: any) => async (dispatch: Function, getState?: Function) => {
+  const tree = getState!() as ObjectState;
+  return tree.descriptor().writer.update(path, obj);
+});
 
 export const boxed = (value: any) => value !== undefined && value !== null && value.valueOf() !== value;
 export const primitive = (value: any) => value === undefined || value === null || typeof value !== 'object';
@@ -120,13 +125,13 @@ export const forms = (initialState: any, logging: {showAll?: boolean, showRegula
 
   const metaReducer = async (state: any, action: any) => {
     state = state ? state: initialState;
-    let tree = state.data();
+    let writer = state.descriptor().writer;
 
     console.log('state', state);
     console.log('action', action);
 
     if(action.type === FormActionsInternal.AutoInit) {
-      await tree.initialize({
+      await writer.initialize({
         a: 'sdsd',
         b: {
           c: 'asd',
@@ -141,9 +146,9 @@ export const forms = (initialState: any, logging: {showAll?: boolean, showRegula
         },
         k: 'sadas'
       });
-      return tree.descriptor();
+      return state;
     } else if(action.type === FormActions.UpdateForm) {
-      await tree.update('b', {
+      await writer.update('b', {
         c: 'asd',
         d: 'sadf',
         e : {
@@ -151,9 +156,10 @@ export const forms = (initialState: any, logging: {showAll?: boolean, showRegula
           g: 'gevrevre'
         }
       });
-      return tree.descriptor();
+      return state;
     }
-    return reducer(tree.descriptor(), action);
+    //return reducer(state, action);
+    return state;
   }
 
   return metaReducer;

@@ -1,4 +1,4 @@
-import { Observable, OperatorFunction, exhaustMap, map } from "rxjs";
+import { Observable, OperatorFunction, exhaustMap, from, iif, map, mergeMap, of } from "rxjs";
 
 export type AnyFn = (...args: any[]) => any;
 
@@ -158,12 +158,19 @@ export function createSelector(
   return memoizedSelector;
 }
 
-export function select<T, K>(selector: (state: T) => K | Promise<K>): OperatorFunction<T, K> {
+export function select<T, K>(selector: ((state: T) => K) | Promise<K>): OperatorFunction<T, K> {
   return (source: Observable<T>): Observable<K> => {
     return source.pipe(
-      (selector instanceof Promise && (selector as any)?.then instanceof Function)
-        ? exhaustMap(state => Promise.resolve(selector(state)).then(value => value))
-        : map(state => selector(state) as K)
-      );
+      exhaustMap(state => {
+        // Check if 'selector' is a promise and handle accordingly
+        if (selector instanceof Promise) {
+          return from(selector);
+        } else {
+          // 'selector' is a function, call it directly
+          return of(selector(state));
+        }
+      })
+    );
   };
 }
+

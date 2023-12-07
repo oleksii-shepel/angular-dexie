@@ -5,7 +5,7 @@ import { BrowserModule } from '@angular/platform-browser';
 import { AppComponent } from './app.component';
 import { StoreModule } from '@ngrx/store';
 
-const tree = new InMemoryObjectState();
+export const tree = new InMemoryObjectState();
 
 export const loggerMiddleware: Middleware = ({dispatch, getState}: {dispatch: any; getState: any}) => (next: (action: any) => any) => async(action: any) => {
   console.log('[Middleware] Received action:', action);
@@ -37,14 +37,14 @@ function rootReducer(state = { value: 0 }, action: any) {
   ],
   imports: [
     BrowserModule,
-    StoreModule.forRoot({}, {
-      metaReducers: [forms(tree.descriptor())]
-    }),
+    // StoreModule.forRoot({}, {
+    //   metaReducers: [forms(tree)]
+    // }),
   ],
   providers: [
     {
       provide: 'Store',
-      useFactory: () => createStore(rootReducer, applyMiddleware(thunkMiddleware, loggerMiddleware))
+      useFactory: () => createStore(rootReducer, tree, applyMiddleware(thunkMiddleware, loggerMiddleware))
     }
   ],
   bootstrap: [AppComponent]
