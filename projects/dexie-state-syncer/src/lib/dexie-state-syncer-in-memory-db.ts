@@ -1,5 +1,6 @@
 import { primitive } from "./dexie-state-syncer-reducer";
 import { StateDescriptor, StateNode, StateObjectDatabase } from './dexie-state-syncer-db';
+import Dexie from "dexie";
 
 
 export class StateObjectInMemoryDatabase extends StateObjectDatabase {
@@ -44,7 +45,13 @@ export class StateObjectInMemoryDatabase extends StateObjectDatabase {
       return (args[2] as any)();
   }
 
-  override stateNodes = [] as any;
+  override get stateNodes(): any {
+    return [...this.nodes.values()]
+  };
+
+  override set stateNodes(table: Dexie.Table<StateNode, number>) {
+    Function.prototype
+  };
 }
 
 export class InMemoryObjectState {
@@ -216,6 +223,25 @@ export class InMemoryObjectState {
     }
   }
 
+  async updateNode(nodeId: number, updates: { left?: number; right?: number }): Promise<StateNode | undefined> {
+    try {
+      // Access the node by its ID and update the necessary properties
+      return await this.db.transaction('rw', this.db.stateNodes, async () => {
+        let node = await this.db.get(nodeId);
+        if (node) {
+          // Update the node's properties with the provided updates
+          node = { ...node, ...updates };
+          await this.db.update(node);
+          return await this.db.get(nodeId);
+        } else {
+          throw new Error(`Node with ID ${nodeId} not found`);
+        }
+      });
+    } catch (err) {
+      throw err;
+    }
+  }
+
   async touchNode(id: number): Promise<StateNode | undefined> {
 
     try {
@@ -312,32 +338,46 @@ export class InMemoryObjectState {
       return await this.db.transaction('rw', this.db.stateNodes, async () => {
         this.root = undefined;
         this.autoincrement = 0;
-        this.db.clear();
+        await this.db.clear();
 
         const rootNode = await this.createNode('root', undefined, undefined);
         const root = rootNode?.id;
 
-        let queue = [];
-        queue.push({obj: obj, parent: root});
+        let queue = [{ obj: obj, parent: root, previousSibling: undefined }];
 
-        while(queue.length > 0) {
-          let { obj, parent } = queue.shift() as {obj: any; parent: number | undefined};
-          for (let key in obj) {
+        while (queue.length > 0) {
+          let { obj, parent, previousSibling } = queue.shift() as { obj: any; parent: number | undefined; previousSibling: number | undefined };
+          let firstChild = undefined;
 
-            let value = obj[key];
-            let record = await this.createNode(key, value, parent)!;
+          for (const key in obj) {
+            const value = obj[key];
+            const record = await this.createNode(key, value, parent);
+            if (!record) {
+              throw new Error('Failed to create a node');
+            }
 
-            if (typeof value === "object") {
-              queue.push({obj: value, parent: record!.id});
+            // If firstChild is undefined, this is the first child of the current parent
+            if (!firstChild) {
+              firstChild = record.id;
+              // Update the parent node with the reference to its first child
+              await this.updateNode(parent!, { left: firstChild });
+            } else {
+              // Update the previous sibling with the reference to its next sibling
+              await this.updateNode(previousSibling!, { right: record.id });
+            }
+
+            // Update previousSibling to the current node's id for the next iteration
+            previousSibling = record.id;
+
+            if (typeof value === 'object') {
+              queue.push({ obj: value, parent: record.id, previousSibling: undefined });
             }
           }
-
         }
-
         return rootNode;
       });
     } catch (err) {
-      return await Promise.reject(err);
+      throw err;
     }
   }
 
@@ -369,7 +409,7 @@ export class InMemoryObjectState {
     try {
       return await this.db.transaction('r', this.db.stateNodes, async () => {
         let subtree = await this.find(path);
-        return subtree && this.getData(subtree);
+        return subtree && await this.getData(subtree);
       });
     } catch (err) {
       return await Promise.reject(err);

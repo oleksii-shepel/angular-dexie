@@ -162,9 +162,11 @@ export function select<T, K>(selector: ((state: T) => K) | Promise<K>): Operator
   return (source: Observable<T>): Observable<K> => {
     return source.pipe(
       exhaustMap(state => {
-        // Check if 'selector' is a promise and handle accordingly
         if (selector instanceof Promise) {
-          return from(selector);
+          // Resolve the promise and then emit its value
+          return from(selector).pipe(
+            mergeMap(resolvedValue => of(resolvedValue))
+          );
         } else {
           // 'selector' is a function, call it directly
           return of(selector(state));
@@ -173,4 +175,5 @@ export function select<T, K>(selector: ((state: T) => K) | Promise<K>): Operator
     );
   };
 }
+
 

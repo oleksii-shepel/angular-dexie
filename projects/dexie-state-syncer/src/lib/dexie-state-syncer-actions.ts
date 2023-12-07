@@ -21,6 +21,7 @@ export function createAction<T, P extends any[]>(
   return (...args: P) => {
     return async (dispatch: Function, getState?: Function) => {
       try {
+        dispatch({ type: `${type}`, payload: args });
         const result = await Promise.resolve(fn(...args));
         const actionResult = await (result as (...args: any[]) => any)(dispatch, getState);
         dispatch({ type: `${type}_SUCCESS`, payload: actionResult });
