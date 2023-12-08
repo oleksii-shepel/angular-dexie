@@ -1,8 +1,6 @@
 import { Component, Inject, OnInit } from '@angular/core';
-import { Store, select } from 'dexie-state-syncer';
+import { Store } from 'dexie-state-syncer';
 import { initTree, updateTree } from 'dexie-state-syncer';
-import { tree } from './app.module';
-import { switchMap } from 'rxjs';
 import { selectTree } from './selectors';
 
 @Component({
@@ -57,9 +55,17 @@ export class AppComponent implements OnInit {
 
   ngOnInit() {
 
-    this.store.pipe(select(selectTree(tree, ''))).subscribe((value) => {
-      console.log(value);
-    });
+    // this.store.subscribe((value) => {
+    //   // Call the selectTree selector with props (if any)
+    //   const stateSelector = selectTree(''); // No need for .then() as it's not a Promise
+    //   // Use the stateSelector function to get the derived state
+    //   stateSelector(value).then((derivedState: any) => {
+    //     console.log(derivedState);
+    //   }).catch((error: any) => {
+    //     // Handle any errors that occur during selector execution
+    //     console.error('Error in selector:', error);
+    //   });
+    // });
 
     this.store.dispatch(initTree({
       a: 'sdsd',

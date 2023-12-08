@@ -409,7 +409,7 @@ export class InMemoryObjectState {
     try {
       return await this.db.transaction('r', this.db.stateNodes, async () => {
         let subtree = await this.find(path);
-        return subtree && await this.getData(subtree);
+        return subtree !== undefined ? await this.getData(subtree) : undefined;
       });
     } catch (err) {
       return await Promise.reject(err);

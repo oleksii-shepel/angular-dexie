@@ -51,7 +51,8 @@ const defaultMemoize: AnyFn = (fn: AnyFn): MemoizedFunction => {
     try {
       const result = fn(...args);
       lastResult = result;
-      lastArgs = args;
+      // Create a shallow copy of the args array to prevent future mutations from affecting the memoization
+      lastArgs = [...args];
       called = true;
       return result;
     } catch (error) {
@@ -68,6 +69,7 @@ const defaultMemoize: AnyFn = (fn: AnyFn): MemoizedFunction => {
 
   return resultFunc;
 };
+
 
 function asyncMemoize(fn: AnyFn): MemoizedFunction {
 
@@ -121,7 +123,6 @@ export function createSelector(
   selectors: SelectorFunction | SelectorFunction[],
   projector?: ProjectorFunction,
   options: { memoizeSelectors?: AnyFn; memoizeProjector?: AnyFn } = {}
-
 ): MemoizedSelector {
   const isSelectorArray = Array.isArray(selectors);
   const selectorArray: SelectorFunction[] = isSelectorArray ? selectors : [selectors];
@@ -131,24 +132,25 @@ export function createSelector(
     throw new Error("Invalid parameters: When 'selectors' is an array, 'projector' function should be provided.");
   }
 
-  const hasAsyncSelectors = selectorArray.some(selector => {
-    return selector instanceof Promise || (selector as any)?.then instanceof Function;
-  });
-
-  const memoizedSelectors: MemoizedFunction[] = selectorArray.map(selector => memoizeSelectors(selector));
+  const memoizedSelectors = selectorArray.map(selector => memoizeSelectors(selector));
   const memoizedProjector = memoizeProjector(projector);
 
-  const memoizedSelector: any = hasAsyncSelectors
-    ? async (state: any, props?: any) => {
-        // Handle asynchronous selectors
-        const selectorResults = await Promise.all(memoizedSelectors.map(selector => selector(state, props)));
-        return projector ? memoizedProjector(...selectorResults, props) : selectorResults[0];
-      }
-    : async (state: any, props?: any) => {
-        // Handle synchronous selectors
-        const selectorResults = await Promise.resolve(memoizedSelectors.map(selector => selector(state, props)));
-        return projector ? memoizedProjector(...selectorResults, props) : selectorResults[0];
-      };
+  // The memoizedSelector function will return a function that returns a Promise
+  const memoizedSelector: MemoizedSelector = (props: any, projectorProps?: any) => {
+    // Return a function that when called with 'state', will execute the selectors and projector
+    return (state: any) => {
+      // Use Promise.all to handle both async and sync selectors
+      const selectorPromises = memoizedSelectors.map(selector =>
+        // Ensure that each selector is called with the appropriate arguments
+        Promise.resolve(selector(state, props))
+      );
+      return Promise.all(selectorPromises).then(resolvedSelectors => {
+        // Apply the projector function to the resolved selector values
+        // Make sure to pass both the resolvedSelectors and projectorProps to the projector
+        return memoizedProjector(...resolvedSelectors, projectorProps);
+      });
+    };
+  };
 
   memoizedSelector.release = () => {
     memoizedSelectors.forEach(selector => selector.release());
@@ -157,6 +159,7 @@ export function createSelector(
 
   return memoizedSelector;
 }
+
 
 export function select<T, K>(selector: ((state: T) => K) | Promise<K>): OperatorFunction<T, K> {
   return (source: Observable<T>): Observable<K> => {
