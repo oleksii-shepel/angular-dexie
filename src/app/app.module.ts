@@ -21,7 +21,7 @@ export const thunkMiddleware: Middleware = ({dispatch, getState}: {dispatch: any
   return await next(action);
 }
 
-function rootReducer(state = tree.descriptor(), action: any) {
+function rootReducer(state: any, action: any) {
   return tree.descriptor();
 }
 @NgModule({

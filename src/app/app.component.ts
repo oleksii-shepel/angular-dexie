@@ -78,16 +78,16 @@ export class AppComponent implements OnInit {
       k: 'sadas'
     }));
 
-    //  let timeout = setTimeout(() => {
-    //    this.store.dispatch(updateTree('b', {
-    //     c: 'asd',
-    //     d: 'sadf',
-    //     e : {
-    //       f: 'dfasdasdasd',
-    //       g: 'gevrevre'
-    //     }
-    //   }));
-    //   clearTimeout(timeout);
-    // }, 5000);
+     let timeout = setTimeout(() => {
+       this.store.dispatch(updateTree('b', {
+        c: 'asd',
+        d: 'sadf',
+        e : {
+          f: 'dfasdasdasd',
+          g: 'gevrevre'
+        }
+      }));
+      clearTimeout(timeout);
+    }, 5000);
   }
 }

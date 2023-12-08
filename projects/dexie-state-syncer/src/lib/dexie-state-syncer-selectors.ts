@@ -138,22 +138,31 @@ export function nomemoize(fn: AnyFn) {
 
 export function createSelector(
   selectors: SelectorFunction | SelectorFunction[],
-  projector?: ProjectorFunction,
-  {
-    memoizeSelectors = asyncMemoize,
-    memoizeProjector = defaultMemoize
-  }: { memoizeSelectors?: AnyFn; memoizeProjector?: AnyFn } = {}
+  projectorOrOptions?: ProjectorFunction | { memoizeSelectors?: AnyFn; memoizeProjector?: AnyFn },
+  options: { memoizeSelectors?: AnyFn; memoizeProjector?: AnyFn } = {}
 ): MemoizedSelector {
   const isSelectorArray = Array.isArray(selectors);
   const selectorArray: SelectorFunction[] = isSelectorArray ? selectors : [selectors];
 
+  let projector: ProjectorFunction | undefined;
+  let memoizeSelectors: AnyFn;
+  let memoizeProjector: AnyFn;
+
+  if (typeof projectorOrOptions === 'function') {
+    projector = projectorOrOptions;
+    memoizeSelectors = options.memoizeSelectors || asyncMemoize;
+    memoizeProjector = options.memoizeProjector || defaultMemoize;
+  } else {
+    memoizeSelectors = (projectorOrOptions && projectorOrOptions.memoizeSelectors) || asyncMemoize;
+    memoizeProjector = (projectorOrOptions && projectorOrOptions.memoizeProjector) || defaultMemoize;
+  }
 
   if (isSelectorArray && !projector) {
     throw new Error("Invalid parameters: When 'selectors' is an array, 'projector' function should be provided.");
   }
 
   const memoizedSelectors = selectorArray.map(selector => memoizeSelectors(selector));
-  const memoizedProjector = projector ? memoizeProjector(projector) : undefined;
+  const memoizedProjector = projector ? memoizeProjector(projector) : (result: any) => result;
 
   // The memoizedSelector function will return a function that returns a Promise
   const memoizedSelector: MemoizedSelector = (props: any, projectorProps?: any) => {
@@ -164,7 +173,7 @@ export function createSelector(
       return Promise.all(selectorPromises).then(resolvedSelectors => {
         // Apply the projector function to the resolved selector values
         // Make sure to pass both the resolvedSelectors and projectorProps to the projector
-        return memoizedProjector ? memoizeProjector(...resolvedSelectors, projectorProps) : resolvedSelectors[0];
+        return memoizedProjector(...resolvedSelectors, projectorProps);
       });
     };
   };
@@ -176,7 +185,6 @@ export function createSelector(
 
   return memoizedSelector;
 }
-
 
 export function select<T, K>(selector: ((state: T) => K) | Promise<K>): OperatorFunction<T, K> {
   return (source: Observable<T>): Observable<K> => {

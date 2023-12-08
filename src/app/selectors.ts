@@ -4,7 +4,7 @@ import { AnyFn, MemoizedFunction, StateDescriptor, createSelector, nomemoize } f
 export function treeMemoize(fn: AnyFn) {
   let cache = {} as any;
   let memoized = (async (...args: any[]) => {
-    let treeDescriptor = (await args[0]).descriptor() as StateDescriptor, props = args[1];
+    let treeDescriptor = args[0] as StateDescriptor, props = args[1];
     let n = await treeDescriptor.reader.find(props);
     if (typeof n !== 'undefined' && n.id === cache.id) {
       console.log('Fetching from cache', n.id);
@@ -25,4 +25,4 @@ export function treeMemoize(fn: AnyFn) {
   return memoized;
 }
 
-export const selectTree = createSelector(async (state: any, props: any) => state === undefined ? state : await state.reader.get(props));
+export const selectTree = createSelector(async (state: any, props: any) => state === undefined ? state : await state.reader.get(props), {memoizeSelectors: treeMemoize});
