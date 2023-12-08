@@ -122,32 +122,32 @@ export function nomemoize(fn: AnyFn) {
 export function createSelector(
   selectors: SelectorFunction | SelectorFunction[],
   projector?: ProjectorFunction,
-  options: { memoizeSelectors?: AnyFn; memoizeProjector?: AnyFn } = {}
+  {
+    memoizeSelectors = asyncMemoize,
+    memoizeProjector = defaultMemoize
+  }: { memoizeSelectors?: AnyFn; memoizeProjector?: AnyFn } = {}
 ): MemoizedSelector {
   const isSelectorArray = Array.isArray(selectors);
   const selectorArray: SelectorFunction[] = isSelectorArray ? selectors : [selectors];
-  const { memoizeSelectors = asyncMemoize, memoizeProjector = defaultMemoize } = options;
+
 
   if (isSelectorArray && !projector) {
     throw new Error("Invalid parameters: When 'selectors' is an array, 'projector' function should be provided.");
   }
 
   const memoizedSelectors = selectorArray.map(selector => memoizeSelectors(selector));
-  const memoizedProjector = memoizeProjector(projector);
+  const memoizedProjector = projector ? memoizeProjector(projector) : undefined;
 
   // The memoizedSelector function will return a function that returns a Promise
   const memoizedSelector: MemoizedSelector = (props: any, projectorProps?: any) => {
     // Return a function that when called with 'state', will execute the selectors and projector
     return (state: any) => {
       // Use Promise.all to handle both async and sync selectors
-      const selectorPromises = memoizedSelectors.map(selector =>
-        // Ensure that each selector is called with the appropriate arguments
-        Promise.resolve(selector(state, props))
-      );
+      const selectorPromises = memoizedSelectors.map(selector => Promise.resolve(selector(state, props)));
       return Promise.all(selectorPromises).then(resolvedSelectors => {
         // Apply the projector function to the resolved selector values
         // Make sure to pass both the resolvedSelectors and projectorProps to the projector
-        return memoizedProjector(...resolvedSelectors, projectorProps);
+        return memoizedProjector ? memoizeProjector(...resolvedSelectors, projectorProps) : resolvedSelectors[0];
       });
     };
   };

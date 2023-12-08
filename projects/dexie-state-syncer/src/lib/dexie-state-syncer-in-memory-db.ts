@@ -387,7 +387,7 @@ export class InMemoryObjectState {
   async find(path: string): Promise<StateNode | undefined> {
     try {
       return await this.db.transaction('r', this.db.stateNodes, async () => {
-        let node = await this.db.get(this.root!);
+        let node = this.root !== undefined ? await this.db.get(this.root!) : undefined;
 
         if(typeof path === 'string' && path.length > 0) {
           const split = path.split('.');
@@ -412,6 +412,7 @@ export class InMemoryObjectState {
     try {
       return await this.db.transaction('r', this.db.stateNodes, async () => {
         let subtree = await this.find(path);
+        console.log(subtree !== undefined ? await this.getData(subtree) : undefined);
         return subtree !== undefined ? await this.getData(subtree) : undefined;
       });
     } catch (err) {

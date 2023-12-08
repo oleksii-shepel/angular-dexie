@@ -55,17 +55,12 @@ export class AppComponent implements OnInit {
 
   ngOnInit() {
 
-    // this.store.subscribe((value) => {
-    //   // Call the selectTree selector with props (if any)
-    //   const stateSelector = selectTree(''); // No need for .then() as it's not a Promise
-    //   // Use the stateSelector function to get the derived state
-    //   stateSelector(value).then((derivedState: any) => {
-    //     console.log(derivedState);
-    //   }).catch((error: any) => {
-    //     // Handle any errors that occur during selector execution
-    //     console.error('Error in selector:', error);
-    //   });
-    // });
+    const stateSelector = selectTree('');
+    this.store.subscribe(async (value) => {
+      // Use the already instantiated stateSelector function to get the derived state
+      let derivedState = await stateSelector(value);
+      console.log(derivedState);
+    });
 
     this.store.dispatch(initTree({
       a: 'sdsd',
@@ -83,16 +78,16 @@ export class AppComponent implements OnInit {
       k: 'sadas'
     }));
 
-     let timeout = setTimeout(() => {
-       this.store.dispatch(updateTree('b', {
-        c: 'asd',
-        d: 'sadf',
-        e : {
-          f: 'dfasdasdasd',
-          g: 'gevrevre'
-        }
-      }));
-      clearTimeout(timeout);
-    }, 5000);
+    //  let timeout = setTimeout(() => {
+    //    this.store.dispatch(updateTree('b', {
+    //     c: 'asd',
+    //     d: 'sadf',
+    //     e : {
+    //       f: 'dfasdasdasd',
+    //       g: 'gevrevre'
+    //     }
+    //   }));
+    //   clearTimeout(timeout);
+    // }, 5000);
   }
 }
