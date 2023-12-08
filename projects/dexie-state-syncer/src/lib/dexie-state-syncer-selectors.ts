@@ -72,41 +72,44 @@ const defaultMemoize: AnyFn = (fn: AnyFn): MemoizedFunction => {
 
 
 function asyncMemoize(fn: AnyFn): MemoizedFunction {
-
-  if (!(fn instanceof Promise) && !((fn as any)?.then instanceof Function)) {
-    return defaultMemoize(fn);
-  }
-
+  let isAsync: boolean | undefined;
   const cache = new Map<string, Promise<any>>();
 
-  const memoizedFn: MemoizedFunction = (...args: any[]) => {
+  const memoizedFn: MemoizedFunction = (...args: any[]): any => {
     const key = args.join(':');
 
     if (cache.has(key)) {
       return cache.get(key);
     }
 
-    const promise = new Promise<any>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error('Function execution timed out'));
-      }, 5000); // Timeout after 5 seconds
-
-      try {
-        const result = fn(...args);
-        clearTimeout(timeout);
-        cache.set(key, Promise.resolve(result));
-        resolve(result);
-      } catch (error) {
-        clearTimeout(timeout);
-        reject(error);
+    // Determine if the function is async only on the first call
+    if (isAsync === undefined) {
+      const result = fn(...args);
+      isAsync = result instanceof Promise && result?.then instanceof Function;
+      // If the function is not async, use defaultMemoize
+      if (!isAsync) {
+        const defaultMemoizedFn: AnyFn = defaultMemoize(fn);
+        return defaultMemoizedFn(...args);
       }
-    });
+    }
+
+    // If the function is async, proceed with memoization
+    const promise = (async () => {
+      try {
+        const result = await fn(...args);
+        cache.set(key, Promise.resolve(result));
+        return result;
+      } catch (error) {
+        cache.delete(key); // Remove from cache if there's an error
+        throw error;
+      }
+    })();
 
     cache.set(key, promise);
     return promise;
   };
 
-  memoizedFn.release = () => {
+  memoizedFn.release = (): void => {
     cache.clear();
   };
 
