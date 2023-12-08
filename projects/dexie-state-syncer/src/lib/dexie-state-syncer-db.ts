@@ -244,18 +244,18 @@ export class ObjectState {
     }
   }
 
-  async updateNode(nodeId: number, updates: { left?: number; right?: number }): Promise<StateNode | undefined> {
+  async updateNode(id: number, updates: { left?: number; right?: number }): Promise<StateNode | undefined> {
     try {
       // Access the node by its ID and update the necessary properties
       return await this.db.transaction('rw', this.db.stateNodes, async () => {
-        let node = await this.db.get(nodeId);
+        let node = await this.db.get(id);
         if (node) {
           // Update the node's properties with the provided updates
           node = { ...node, ...updates };
           await this.db.update(node);
-          return await this.db.get(nodeId);
+          return await this.db.get(id);
         } else {
-          throw new Error(`Node with ID ${nodeId} not found`);
+          throw new Error(`Node with ID ${id} not found`);
         }
       });
     } catch (err) {

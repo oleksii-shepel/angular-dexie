@@ -182,59 +182,68 @@ export class InMemoryObjectState {
 
   async deleteNode(id: number) {
     try {
-      return await this.db.transaction('rw', this.db.stateNodes, async () => {
-        let node = await this.db.get(id);
-        if (node === undefined) return;
+      await this.db.transaction('rw', this.db.stateNodes, async () => {
+        const node = await this.db.get(id);
+        if (!node) return;
 
-        if (node.left !== undefined) {
-          let left = await this.db.get(node.left)!;
-
-          while (left?.right !== undefined) {
-            let right = await this.db.get(left.right)!;
-            this.deleteNode(left.id!);
-            left = right;
+        // Recursively delete all left descendants
+        let leftChildId = node.left;
+        while (leftChildId) {
+          const leftChild = await this.db.get(leftChildId);
+          if (leftChild) {
+            await this.deleteNode(leftChild.id!);
+            leftChildId = leftChild.right;
+          } else {
+            leftChildId = undefined;
           }
-          if(left) { this.deleteNode(left.id!); }
-          await this.db.set({ ...node, left: undefined });
         }
 
-        if (node.parent === undefined) {
-          await this.db.remove(node.id!);
+        // Remove the node if it has no parent (it's the root)
+        if (!node.parent) {
+          await this.db.remove(id);
           this.root = undefined;
         } else {
-          let parentNode = await this.db.get(node.parent);
-          if (parentNode !== undefined && parentNode.left === node.id) {
-            await this.db.remove(node.id!);
+          // Update the parent's left reference if necessary
+          const parentNode = await this.db.get(node.parent);
+          if (parentNode && parentNode.left === id) {
+            await this.db.remove(id);
             parentNode.left = node.right;
+            await this.db.set(parentNode);
           } else {
-            let siblingNode = await this.db.get(parentNode?.left as number);
-            while (siblingNode !== undefined && siblingNode.right !== node.id) {
-              siblingNode = await this.db.get(siblingNode.right as number);
+            // Find and update the sibling that points to this node
+            let siblingId = parentNode?.left;
+            while (siblingId) {
+              const siblingNode = await this.db.get(siblingId);
+              if (siblingNode && siblingNode.right === id) {
+                siblingNode.right = node.right;
+                await this.db.set(siblingNode);
+                break;
+              }
+              siblingId = siblingNode?.right;
             }
-            if (siblingNode !== undefined) {
-              await this.db.remove(node.id!);
-              siblingNode.right = node.right;
-            }
+            await this.db.remove(id);
           }
         }
       });
     } catch (err) {
-      return Promise.reject(err);
+      console.error('Failed to delete node with id:', id, err);
+      throw err; // Rethrow the error to be handled by the caller
     }
   }
 
-  async updateNode(nodeId: number, updates: { left?: number; right?: number; parent?: number; }): Promise<StateNode | undefined> {
+
+  async updateNode(id: number, updates: { left?: number; right?: number; parent?: number; }): Promise<StateNode | undefined> {
     try {
       // Access the node by its ID and update the necessary properties
       return await this.db.transaction('rw', this.db.stateNodes, async () => {
-        let node = await this.db.get(nodeId);
+        let node = await this.db.get(id);
         if (node) {
           // Update the node's properties with the provided updates
           node = { ...node, ...updates };
           await this.db.update(node);
-          return await this.db.get(nodeId);
+          return await this.db.get(id);
         } else {
-          throw new Error(`Node with ID ${nodeId} not found`);
+          throw new Error(`Node with ID ${id} not found`);
         }
       });
     } catch (err) {
@@ -474,57 +483,65 @@ export class InMemoryObjectState {
     }
   }
 
-  async delete(path: string) {
+  async delete(path: string): Promise<void> {
     try {
-      return await this.db.transaction('rw', this.db.stateNodes, async () => {
-        let subtreeRoot = await this.find(path);
-        if(subtreeRoot === undefined) { return undefined; }
+      await this.db.transaction('rw', this.db.stateNodes, async () => {
+        const nodeToDelete = await this.find(path);
+        if (!nodeToDelete) return;
 
-        const parent = subtreeRoot.parent ? await this.db.get(subtreeRoot.parent) : undefined;
+        await this.recursivelyDeleteSubtree(nodeToDelete.left);
 
+        const parent = nodeToDelete.parent ? await this.db.get(nodeToDelete.parent) : undefined;
         if (parent) {
-          if (parent.left === subtreeRoot.id) {
-            parent.left = subtreeRoot.right;
-            await this.updateNode(parent.id!, {left: parent.left}); // Update the parent in the database
+          if (parent.left === nodeToDelete.id) {
+            parent.left = nodeToDelete.right;
           } else {
             let current = parent.left ? await this.db.get(parent.left) : undefined;
-            while (current && current.right && current.right !== subtreeRoot.id) {
+            while (current?.right && current.right !== nodeToDelete.id) {
               current = await this.db.get(current.right);
             }
             if (current) {
-              current.right = subtreeRoot.right;
-              await this.updateNode(current.id!, {right: current.right}); // Update the current node in the database
+              current.right = nodeToDelete.right;
             }
           }
+          await this.updateNode(parent.id!, { left: parent.left, right: parent.right });
         }
 
-        await this.recursivelyDeleteSubtree(subtreeRoot.id); // Await the deletion of the subtree
-        return true;
+        await this.deleteNode(nodeToDelete.id!);
       });
     } catch (err) {
-      return Promise.reject(err);
+      console.error('Failed to delete node:', err);
+      throw err;
     }
   }
 
 
+
   async recursivelyDeleteSubtree(nodeId: number | undefined) {
     try {
-      await this.db.transaction('rw', this.db.stateNodes, async () => {
-        if (nodeId === undefined) {
-          return;
-        }
-        const node = await this.db.get(nodeId);
-        if (node) {
-          if (node.left !== undefined) {
-            await this.recursivelyDeleteSubtree(node.left);
+      if (nodeId === undefined) {
+        return;
+      }
+      const node = await this.db.get(nodeId);
+      if (node) {
+        // Recursively delete the left subtree (the left child and all its right siblings)
+        let childId = node.left;
+        while (childId !== undefined) {
+          const childNode = await this.db.get(childId);
+          if (childNode) {
+            // Recursively delete the left child of the current child node
+            if (childNode.left !== undefined) {
+              await this.recursivelyDeleteSubtree(childNode.left);
+            }
+            // Save the right sibling ID before deleting the current child node
+            const rightSiblingId = childNode.right;
+            // Delete the current child node
+            await this.deleteNode(childId);
+            // Move on to the right sibling
+            childId = rightSiblingId;
           }
-          if (node.right !== undefined) {
-            await this.recursivelyDeleteSubtree(node.right);
-          }
-
-          await this.deleteNode(nodeId);
         }
-      });
+      }
     } catch (err) {
       return Promise.reject(err);
     }

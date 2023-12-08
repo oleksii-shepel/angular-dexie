@@ -15,12 +15,16 @@ export enum FormActionsInternal {
 
 export const initTree = createAction(FormActionsInternal.AutoInit, (obj: any) => async (dispatch: Function, getState?: Function) => {
   const tree = getState!() as ObjectState;
-  return tree.descriptor().writer.initialize(obj);
+  const result = await tree.descriptor().writer.initialize(obj);
+  console.log(await tree.get(''));
+  return result;
 });
 
 export const updateTree = createAction(FormActions.UpdateForm, (path: string, obj: any) => async (dispatch: Function, getState?: Function) => {
   const tree = getState!() as ObjectState;
-  return tree.descriptor().writer.update(path, obj);
+  const result = await tree.descriptor().writer.update(path, obj);
+  console.log(await tree.get(''));
+  return result;
 });
 
 export const boxed = (value: any) => value !== undefined && value !== null && value.valueOf() !== value;
