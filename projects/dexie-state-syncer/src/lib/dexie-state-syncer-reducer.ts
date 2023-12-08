@@ -14,14 +14,14 @@ export enum FormActionsInternal {
 }
 
 export const initTree = createAction(FormActionsInternal.AutoInit, (obj: any) => async (dispatch: Function, getState?: Function) => {
-  const tree = getState!() as ObjectState;
-  const result = await tree.descriptor().writer.initialize(obj);
+  const state = getState!();
+  const result = await state.writer.initialize(obj);
   return result;
 });
 
 export const updateTree = createAction(FormActions.UpdateForm, (path: string, obj: any) => async (dispatch: Function, getState?: Function) => {
-  const tree = getState!() as ObjectState;
-  const result = await tree.descriptor().writer.update(path, obj);
+  const state = getState!();
+  const result = await state.writer.update(path, obj);
   return result;
 });
 

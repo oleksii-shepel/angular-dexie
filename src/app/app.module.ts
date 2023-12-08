@@ -21,15 +21,8 @@ export const thunkMiddleware: Middleware = ({dispatch, getState}: {dispatch: any
   return await next(action);
 }
 
-function rootReducer(state = { value: 0 }, action: any) {
-  switch (action.type) {
-    case 'counter/incremented':
-      return { value: state.value + 1 }
-    case 'counter/decremented':
-      return { value: state.value - 1 }
-    default:
-      return state
-  }
+function rootReducer(state = tree.descriptor(), action: any) {
+  return tree.descriptor();
 }
 @NgModule({
   declarations: [
@@ -44,7 +37,7 @@ function rootReducer(state = { value: 0 }, action: any) {
   providers: [
     {
       provide: 'Store',
-      useFactory: () => createStore(rootReducer, tree, applyMiddleware(thunkMiddleware, loggerMiddleware))
+      useFactory: () => createStore(rootReducer, applyMiddleware(thunkMiddleware, loggerMiddleware))
     }
   ],
   bootstrap: [AppComponent]

@@ -73,6 +73,7 @@ export interface StateDescriptor {
   date: number;
   reader: StateReader;
   writer: StateWriter;
+  state: ObjectState;
 }
 
 export class ObjectState {
@@ -87,7 +88,7 @@ export class ObjectState {
   }
 
   descriptor(): StateDescriptor {
-    return { autoincrement: this.autoincrement, root: this.root, date: Date.now(),
+    return { autoincrement: this.autoincrement, root: this.root, date: Date.now(), state: this,
       reader: {
         get: (path) => this.get(Array.isArray(path) ? path.join('.') : path),
         find: (path) => this.find(Array.isArray(path) ? path.join('.') : path)

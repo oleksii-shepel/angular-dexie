@@ -66,7 +66,7 @@ export class InMemoryObjectState {
   }
 
   descriptor(): StateDescriptor {
-    return { autoincrement: this.autoincrement, root: this.root, date: Date.now(),
+    return { autoincrement: this.autoincrement, root: this.root, date: Date.now(), state: this,
       reader: {
         get: (path) => this.get(Array.isArray(path) ? path.join('.') : path),
         find: (path) => this.find(Array.isArray(path) ? path.join('.') : path)
@@ -412,7 +412,6 @@ export class InMemoryObjectState {
     try {
       return await this.db.transaction('r', this.db.stateNodes, async () => {
         let subtree = await this.find(path);
-        console.log(subtree !== undefined ? await this.getData(subtree) : undefined);
         return subtree !== undefined ? await this.getData(subtree) : undefined;
       });
     } catch (err) {

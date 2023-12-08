@@ -25,4 +25,4 @@ export function treeMemoize(fn: AnyFn) {
   return memoized;
 }
 
-export const selectTree = createSelector(async (state: any, props: any) => state === undefined ? state : await state.descriptor().reader.get(props));
+export const selectTree = createSelector(async (state: any, props: any) => state === undefined ? state : await state.reader.get(props));
