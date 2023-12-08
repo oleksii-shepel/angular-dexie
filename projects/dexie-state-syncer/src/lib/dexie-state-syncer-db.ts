@@ -110,7 +110,7 @@ export class ObjectState {
         return nodeValue?.left === undefined;
       });
     } catch (err) {
-      return await Promise.reject(err);
+      return Promise.reject(err);
     }
   }
 
@@ -165,7 +165,7 @@ export class ObjectState {
         return newNode_1;
       });
     } catch (err) {
-      return await Promise.reject();
+      return Promise.reject();
     }
   }
 
@@ -175,7 +175,7 @@ export class ObjectState {
         return await this.db.get(id);
       });
     } catch (err) {
-      return await Promise.reject(err);
+      return Promise.reject(err);
     }
   }
 
@@ -197,7 +197,7 @@ export class ObjectState {
         return undefined;
       });
     } catch (err) {
-      return await Promise.reject(err);
+      return Promise.reject(err);
     }
   }
 
@@ -240,7 +240,7 @@ export class ObjectState {
         }
       });
     } catch (err) {
-      return await Promise.reject(err);
+      return Promise.reject(err);
     }
   }
 
@@ -263,69 +263,54 @@ export class ObjectState {
     }
   }
 
-  async touchNode(id: number): Promise<StateNode | undefined> {
-
+  async touchNode(id: number, updates: { left?: number; right?: number; parent?: number; }): Promise<StateNode | undefined> {
     try {
       return await this.db.transaction('rw', this.db.stateNodes, async () => {
-        let node = await this.db.get(id)!;
-        let newNode = undefined;
-
-        if (node !== undefined && node.parent === undefined) {
-          const newNodeId = await this.db.set({
-            ...node,
-            id: this.autoincrement
-          });
-
-          newNode = await this.db.get(this.autoincrement);
-
-          await this.db.remove(node.id!);
-
-          this.root = this.autoincrement;
-          this.autoincrement++;
+        let node = await this.db.get(id);
+        if (!node) {
+          throw new Error('Node not found');
         }
-        else if (node !== undefined && node.parent !== undefined) {
+        let newNode: StateNode = {
+          ...node,
+          ...updates,
+          id: this.autoincrement // Assign a new ID from autoincrement
+        };
+
+        // Save the new node to the database with the new ID
+        await this.db.set(newNode);
+
+        // If the node is the root, update the root reference
+        if (node.parent === undefined) {
+          this.root = this.autoincrement; // The new node is now the root
+        } else {
+          // Update the parent's reference to the new node
           let parentNode = await this.db.get(node.parent);
-          if (parentNode !== undefined && parentNode.left === node.id) {
-            const newNodeId_1 = await this.db.set({
-              ...node,
-              id: this.autoincrement
-            });
-
-            newNode = await this.db.get(this.autoincrement);
-
-            await this.db.remove(node.id!);
-            parentNode.left = (newNode?.id)!;
-            this.autoincrement++;
+          if (parentNode && parentNode.left === node.id) {
+            parentNode.left = this.autoincrement;
+            await this.db.set(parentNode); // Save the updated parent node
           } else {
-            let siblingNode = await this.db.get(parentNode?.left as number);
-            while (siblingNode !== undefined && siblingNode.right !== node.id) {
-              siblingNode = await this.db.get(siblingNode.right as number);
+            let current = parentNode && parentNode.left ? await this.db.get(parentNode.left) : undefined;
+            while (current && current.right && current.right !== node.id) {
+              current = await this.db.get(current.right);
             }
-            if (siblingNode !== undefined) {
-              const newNodeId_2 = await this.db.set({
-                ...siblingNode,
-                id: this.autoincrement
-              });
-
-              newNode = await this.db.get(this.autoincrement);
-
-              await this.db.remove(siblingNode.id!);
-              siblingNode.right = node.id!;
+            if (current) {
+              current.right = this.autoincrement;
+              await this.db.set(current); // Save the updated sibling node
             }
           }
         }
 
-        if (node?.left !== undefined) {
-          let child: StateNode | undefined = await this.db.get(node.left);
-          while (child !== undefined) {
-            child.parent = (newNode?.id)!;
-            child = child.right ? await this.db.get(child.right) : undefined;
-          }
-        }
-        return newNode!;
+        // Remove the old node from the database
+        await this.db.remove(node.id!);
+
+        // Increment the autoincrement value for the next node
+        this.autoincrement++;
+
+        return newNode; // Return the new node
       });
     } catch (err) {
-      return await Promise.reject(err);
+      console.error(err);
+      return Promise.reject(err);
     }
   }
 
@@ -349,7 +334,7 @@ export class ObjectState {
         return data;
       });
     } catch (err) {
-      return await Promise.reject(err);
+      return Promise.reject(err);
     }
   }
 
@@ -377,17 +362,23 @@ export class ObjectState {
               throw new Error('Failed to create a node');
             }
 
-            // If firstChild is undefined, this is the first child of the current parent
             if (!firstChild) {
               firstChild = record.id;
-              // Update the parent node with the reference to its first child
-              await this.updateNode(parent!, { left: firstChild });
+              // Retrieve the parent node from the database, update it, and save it back
+              let parentNode = await this.db.get(parent!);
+              if (parentNode) {
+                parentNode.left = firstChild;
+                await this.db.set(parentNode);
+              }
             } else {
-              // Update the previous sibling with the reference to its next sibling
-              await this.updateNode(previousSibling!, { right: record.id });
+              // Retrieve the previous sibling from the database, update it, and save it back
+              let prevSiblingNode = await this.db.get(previousSibling!);
+              if (prevSiblingNode) {
+                prevSiblingNode.right = record.id;
+                await this.db.set(prevSiblingNode);
+              }
             }
 
-            // Update previousSibling to the current node's id for the next iteration
             previousSibling = record.id;
 
             if (typeof value === 'object') {
@@ -398,6 +389,7 @@ export class ObjectState {
         return rootNode;
       });
     } catch (err) {
+      console.error('Error initializing tree:', err);
       throw err;
     }
   }
@@ -422,7 +414,7 @@ export class ObjectState {
         return node;
       });
     } catch (err) {
-      return await Promise.reject(err);
+      return Promise.reject(err);
     }
   }
 
@@ -433,7 +425,7 @@ export class ObjectState {
         return subtree && await this.getData(subtree);
       });
     } catch (err) {
-      return await Promise.reject(err);
+      return Promise.reject(err);
     }
   }
 
@@ -441,7 +433,7 @@ export class ObjectState {
     try {
       return await this.db.transaction('rw', this.db.stateNodes, async () => {
         let rootNode = await this.db.get(this.root!);
-        let node = rootNode !== undefined ? await this.touchNode(rootNode.id!) : await this.createNode('root', undefined, undefined);
+        let node = rootNode !== undefined ? await this.touchNode(rootNode.id!, {}) : await this.createNode('root', undefined, undefined);
 
         if(typeof path === 'string' && path.length > 0) {
           const split = path.split('.');
@@ -458,7 +450,7 @@ export class ObjectState {
             if (nextChild === undefined) {
               nextChild = parent && await this.createNode(part, undefined, parent.id);
             } else {
-              nextChild = await this.touchNode(nextChild.id!);
+              nextChild = await this.touchNode(nextChild.id!, {});
             }
 
             parent = nextChild;
@@ -488,7 +480,7 @@ export class ObjectState {
         return node;
       });
     } catch (err) {
-      return await Promise.reject(err);
+      return Promise.reject(err);
     }
   }
 
@@ -499,7 +491,7 @@ export class ObjectState {
         return await this.create(obj, path);
       });
     } catch (err) {
-      return await Promise.reject(err);
+      return Promise.reject(err);
     }
   }
 
@@ -511,7 +503,7 @@ export class ObjectState {
         return subtree;
       });
     } catch (err) {
-      return await Promise.reject(err);
+      return Promise.reject(err);
     }
   }
 }
