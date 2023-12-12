@@ -146,8 +146,9 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
       // Handle Observable actions without subscribing
       actionSubject.next(action);
     } else if (typeof action === 'function') {
-      // If the action is a function, it's an AsyncAction, so call it with dispatch and getState
-      action(dispatch, getState);
+      // If the action is a function, it's an AsyncAction
+      // Automatically bind dispatch and getState to the AsyncAction
+      return (dispatch: Function, getState?: Function) => action(dispatch, getState);
     }
   }
 

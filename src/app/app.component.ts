@@ -75,7 +75,7 @@ export class AppComponent implements OnInit {
         j: 'dsfsdf'
       },
       k: 'sadas'
-    })(this.store.dispatch, this.store.getState));
+    }));
 
      let timeout = setTimeout(() => {
        this.store.dispatch(updateTreeObservable('b', {
@@ -85,7 +85,7 @@ export class AppComponent implements OnInit {
           f: 'dfasdasdasd',
           g: 'gevrevre'
         }
-      })(this.store.dispatch, this.store.getState));
+      }));
       clearTimeout(timeout);
     }, 5000);
   }
