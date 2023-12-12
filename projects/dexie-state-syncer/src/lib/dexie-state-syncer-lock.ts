@@ -1,38 +1,30 @@
 export class Lock {
   private isLocked: boolean = false;
-  private queue: (() => void)[] = [];
+  private queue: Array<() => void> = [];
 
   constructor() {}
 
-  private async lock(): Promise<void> {
+  public async acquire(): Promise<void> {
+    // Return a promise that resolves immediately if not locked,
+    // otherwise, add to the queue to be resolved later.
     return new Promise((resolve) => {
-      if (this.isLocked) {
-        this.queue.push(resolve);
-      } else {
+      if (!this.isLocked) {
         this.isLocked = true;
         resolve();
+      } else {
+        this.queue.push(resolve);
       }
     });
   }
 
-  private unlock(): void {
-    if (this.queue.length > 0) {
-      const next = this.queue.shift();
-      if (next) {
-        next();
-      }
+  public release(): void {
+    const nextResolve = this.queue.shift();
+    if (nextResolve) {
+      // Unlock the next promise in the queue
+      nextResolve();
     } else {
+      // If the queue is empty, set isLocked to false
       this.isLocked = false;
-    }
-  }
-
-  async handle(action: any, next: (store: any) => (action: any) => void) {
-    await this.lock();
-
-    try {
-      await next(action);
-    } finally {
-      this.unlock();
     }
   }
 }

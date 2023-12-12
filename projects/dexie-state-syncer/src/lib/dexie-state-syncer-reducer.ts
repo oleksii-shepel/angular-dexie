@@ -1,6 +1,7 @@
 import { ProfilePage, initialProfilePage } from './dexie-state-syncer-models';
-import { Action, ActionReducer, combineReducers } from '@ngrx/store';
-import { ObjectState, createAction } from 'dexie-state-syncer';
+import { ActionReducer, combineReducers } from '@ngrx/store';
+import { ObjectState, createAction, Action } from 'dexie-state-syncer';
+import { EMPTY, Observable, catchError, concatMap, from, map, of, switchMap,tap } from 'rxjs';
 
 export enum FormActions {
   UpdateForm = '@forms/form/update',
@@ -24,6 +25,64 @@ export const updateTree = createAction(FormActions.UpdateForm, (path: string, ob
   const result = await state.writer.update(path, obj);
   return result;
 });
+
+// Define the createObservable function
+// The createObservable function now accepts a variable number of arguments for the operation
+function createObservable(
+  type: string,
+  operation: (...args: any[]) => (dispatch: Function, getState?: Function) => Observable<any> | Promise<any> | any
+): (...args: any[]) => (dispatch: Function, getState?: Function) => Observable<Action<any>> {
+  return (...args: any[]) => (dispatch: Function, getState?: Function): Observable<Action<any>> => {
+    // Perform the operation and get the result
+    const operationResult = operation(...args)(dispatch, getState);
+
+    // Check if the operation result is an Observable or a Promise (asynchronous)
+    if (operationResult instanceof Observable) {
+      // Handle Observable
+      return operationResult.pipe(
+        concatMap((result: any) => of({ type: `${type}_SUCCESS`, payload: result })),
+        catchError((error: any) => {
+          dispatch({ type: `${type}_FAILURE`, payload: error, error: true });
+          return EMPTY;
+        })
+      );
+    } else if (operationResult instanceof Promise) {
+      // Convert Promise to Observable
+      return from(operationResult).pipe(
+        concatMap((result: any) => of({ type: `${type}_SUCCESS`, payload: result })),
+        catchError((error: any) => {
+          dispatch({ type: `${type}_FAILURE`, payload: error, error: true });
+          return EMPTY;
+        })
+      );
+    } else {
+      // If the operation is synchronous, return an Observable of the action
+      return of({ type: `${type}_SUCCESS`, payload: operationResult });
+    }
+  };
+}
+
+
+
+
+export const initTreeObservable = createObservable(
+  'INIT_TREE', // Specify the action type for initializing the tree
+  (obj: any) => (dispatch, getState) => {
+    // Assuming getState().writer.initialize returns an Observable
+    return getState!().writer.initialize(obj);
+  }
+);
+
+// Usage example for updateTreeObservable
+export const updateTreeObservable = createObservable(
+  'UPDATE_TREE', // Specify the action type for updating the tree
+  (path: string, obj: any) => (dispatch, getState) => {
+    // Assuming getState().writer.update returns an Observable
+    return getState!().writer.update(path, obj);
+  }
+);
+
+
 
 export const boxed = (value: any) => value !== undefined && value !== null && value.valueOf() !== value;
 export const primitive = (value: any) => value === undefined || value === null || typeof value !== 'object';

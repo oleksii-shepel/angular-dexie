@@ -13,5 +13,6 @@ export * from './lib/dexie-state-syncer-selectors';
 export * from './lib/dexie-state-syncer-actions';
 export * from './lib/dexie-state-syncer-redux';
 export * from './lib/dexie-state-syncer-lock';
+export * from './lib/dexie-state-syncer-behaviour-subject';
 
 
