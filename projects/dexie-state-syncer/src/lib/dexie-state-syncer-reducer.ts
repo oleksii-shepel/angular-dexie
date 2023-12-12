@@ -33,12 +33,9 @@ function createObservable(
   operation: (...args: any[]) => (dispatch: Function, getState?: Function) => Observable<any> | Promise<any> | any
 ): (...args: any[]) => (dispatch: Function, getState?: Function) => Observable<Action<any>> {
   return (...args: any[]) => (dispatch: Function, getState?: Function): Observable<Action<any>> => {
-    // Perform the operation and get the result
     const operationResult = operation(...args)(dispatch, getState);
 
-    // Check if the operation result is an Observable or a Promise (asynchronous)
     if (operationResult instanceof Observable) {
-      // Handle Observable
       return operationResult.pipe(
         concatMap((result: any) => of({ type: `${type}_SUCCESS`, payload: result })),
         catchError((error: any) => {
@@ -47,7 +44,6 @@ function createObservable(
         })
       );
     } else if (operationResult instanceof Promise) {
-      // Convert Promise to Observable
       return from(operationResult).pipe(
         concatMap((result: any) => of({ type: `${type}_SUCCESS`, payload: result })),
         catchError((error: any) => {
@@ -56,31 +52,23 @@ function createObservable(
         })
       );
     } else {
-      // If the operation is synchronous, return an Observable of the action
       return of({ type: `${type}_SUCCESS`, payload: operationResult });
     }
   };
 }
 
 
-
-
-export const initTreeObservable = createObservable(
-  'INIT_TREE', // Specify the action type for initializing the tree
-  (obj: any) => (dispatch, getState) => {
-    // Assuming getState().writer.initialize returns an Observable
+export const initTreeObservable = createObservable('INIT_TREE', (obj: any) => {
+  return (dispatch: Function, getState?: Function): Observable<Action<any>> => {
     return getState!().writer.initialize(obj);
-  }
-);
+  };
+});
 
-// Usage example for updateTreeObservable
-export const updateTreeObservable = createObservable(
-  'UPDATE_TREE', // Specify the action type for updating the tree
-  (path: string, obj: any) => (dispatch, getState) => {
-    // Assuming getState().writer.update returns an Observable
+export const updateTreeObservable = createObservable('UPDATE_TREE', (path: string, obj: any) => {
+  return (dispatch: Function, getState?: Function): Observable<Action<any>> => {
     return getState!().writer.update(path, obj);
-  }
-);
+  };
+});
 
 
 
