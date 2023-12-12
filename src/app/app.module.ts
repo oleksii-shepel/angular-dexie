@@ -1,4 +1,4 @@
-import { InMemoryObjectState, Middleware, applyMiddleware, createStore, forms, Store } from 'dexie-state-syncer';
+import { InMemoryObjectState, Middleware, applyMiddleware, createStore } from 'dexie-state-syncer';
 import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 
@@ -6,7 +6,7 @@ import { AppComponent } from './app.component';
 
 export const tree = new InMemoryObjectState();
 
-export const loggerMiddleware: Middleware = ({dispatch, getState}: {dispatch: any; getState: any}) => (next: (action: any) => any) => async(action: any) => {
+export const loggerMiddleware: Middleware = ({}: {dispatch: any; getState: any}) => (next: (action: any) => any) => async(action: any) => {
   console.log('[Middleware] Received action:', action);
   const result = await next(action);
   console.log('[Middleware] Processed action:', result);
