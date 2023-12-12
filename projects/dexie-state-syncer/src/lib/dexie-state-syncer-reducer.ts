@@ -80,13 +80,13 @@ function createObservable<T>(
 
 
 export const initTreeObservable = createObservable('INIT_TREE', (obj: any) => {
-  return (dispatch: Function, getState?: Function): Observable<Action<any>> => {
+  return (dispatch: Function, getState?: Function): Promise<any> => {
     return getState!().writer.initialize(obj);
   };
 });
 
 export const updateTreeObservable = createObservable('UPDATE_TREE', (path: string, obj: any) => {
-  return (dispatch: Function, getState?: Function): Observable<Action<any>> => {
+  return (dispatch: Function, getState?: Function): Promise<any> => {
     return getState!().writer.update(path, obj);
   };
 });
