@@ -120,29 +120,14 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
   let currentReducer = reducer;
   let currentState = new BehaviorSubject<K>(preloadedState as K);
   let actionSubject = new Subject<Observable<Action<any>>>();
+  let isDispatching = false;
   let actionQueue = actionSubject.pipe(
     concatMap(action => action),
-    //concatMap(action => action),
-    // tap((action) => {
-    //   if (!isPlainObject(action) || action instanceof Function) {
-    //     throw new Error(`Actions must be plain objects. Instead, the actual type was: '${kindOf(action)}'. You may need to add middleware to your store setup to handle dispatching other values, such as 'redux-thunk' to handle dispatching functions. See https://redux.js.org/tutorials/fundamentals/part-4-store#middleware and https://redux.js.org/tutorials/fundamentals/part-6-async-logic#using-the-redux-thunk-middleware for examples.`);
-    //   }
-    //   if (typeof action.type === "undefined") {
-    //     throw new Error('Actions may not have an undefined "type" property. You may have misspelled an action type string constant.');
-    //   }
-    //   if (typeof action.type !== "string") {
-    //     throw new Error(`AsyncAction "type" property must be a string. Instead, the actual type was: '${kindOf(action.type)}'. Value was: '${action.type}' (stringified)`);
-    //   }
-    //   if (isDispatching) {
-    //     throw new Error("Reducers may not dispatch actions.");
-    //   }
-    // }),
     tap(() => isDispatching = true),
     map((action) => currentReducer(currentState.value, action)),
     tap(state => (currentState.next(state), isDispatching = false))
   ).subscribe();
 
-  let isDispatching = false;
 
   function getState(): K {
     return currentState.value;
@@ -157,8 +142,13 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
   }
 
   function dispatch(action: Observable<Action<any>> | AsyncAction<any>): any {
-    // queueScheduler.schedule(() => processAction(action));
-    actionSubject.next(typeof action === 'function' ? action(dispatch, getState) : action);
+    if (action instanceof Observable) {
+      // Handle Observable actions without subscribing
+      actionSubject.next(action);
+    } else if (typeof action === 'function') {
+      // If the action is a function, it's an AsyncAction, so call it with dispatch and getState
+      action(dispatch, getState);
+    }
   }
 
   function replaceReducer(nextReducer: Function): void {
@@ -166,7 +156,7 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
       throw new Error(`Expected the nextReducer to be a function. Instead, received: '${kindOf(nextReducer)}`);
     }
     currentReducer = nextReducer;
-    dispatch(() => of({
+    dispatch(of({
       type: actionTypes_default.REPLACE
     }));
   }
@@ -175,7 +165,7 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
     return operators.reduce((source, operator) => operator(source), currentState as Observable<K>);
   }
 
-  dispatch(() => of({
+  dispatch(of({
     type: actionTypes_default.INIT
   }));
 

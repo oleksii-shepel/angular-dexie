@@ -1,6 +1,6 @@
 import { ProfilePage, initialProfilePage } from './dexie-state-syncer-models';
 import { ActionReducer, combineReducers } from '@ngrx/store';
-import { ObjectState, createAction, Action } from 'dexie-state-syncer';
+import { ObjectState, createAction, Action, AsyncAction } from 'dexie-state-syncer';
 import { EMPTY, Observable, catchError, concatMap, from, map, of, switchMap,tap } from 'rxjs';
 
 export enum FormActions {
@@ -28,32 +28,53 @@ export const updateTree = createAction(FormActions.UpdateForm, (path: string, ob
 
 // Define the createObservable function
 // The createObservable function now accepts a variable number of arguments for the operation
-function createObservable(
+function createObservable<T>(
   type: string,
-  operation: (...args: any[]) => (dispatch: Function, getState?: Function) => Observable<any> | Promise<any> | any
-): (...args: any[]) => (dispatch: Function, getState?: Function) => Observable<Action<any>> {
-  return (...args: any[]) => (dispatch: Function, getState?: Function): Observable<Action<any>> => {
+  operation?: (...args: any[]) => (dispatch: Function, getState?: Function) => T | Promise<T> | Observable<T>
+) {
+  return (...args: any[]) => (dispatch: Function, getState?: Function): Observable<Action<T>> => {
+    // Dispatch an Observable of the request action
+    const requestAction = of({ type: `${type}_REQUEST` });
+    dispatch(requestAction);
+
+    // If no operation is provided, return an Observable of a simple action
+    if (!operation) {
+      const action = of({ type, payload: args.length === 1 ? args[0] : args });
+      dispatch(action);
+      return action as Observable<Action<T>>;
+    }
+
+    // Execute the operation and handle the result
     const operationResult = operation(...args)(dispatch, getState);
 
-    if (operationResult instanceof Observable) {
-      return operationResult.pipe(
-        concatMap((result: any) => of({ type: `${type}_SUCCESS`, payload: result })),
-        catchError((error: any) => {
-          dispatch({ type: `${type}_FAILURE`, payload: error, error: true });
-          return EMPTY;
-        })
-      );
-    } else if (operationResult instanceof Promise) {
-      return from(operationResult).pipe(
-        concatMap((result: any) => of({ type: `${type}_SUCCESS`, payload: result })),
-        catchError((error: any) => {
-          dispatch({ type: `${type}_FAILURE`, payload: error, error: true });
-          return EMPTY;
-        })
-      );
+    // Convert the operation result to an Observable if it's not already one
+    let resultObservable: Observable<T>;
+    if (operationResult instanceof Promise) {
+      resultObservable = from(operationResult);
+    } else if (operationResult instanceof Observable) {
+      resultObservable = operationResult;
     } else {
-      return of({ type: `${type}_SUCCESS`, payload: operationResult });
+      resultObservable = of(operationResult);
     }
+
+    // Map the result to an Observable of Action<T>
+    const actionObservable = resultObservable.pipe(
+      map(result => ({
+        type: `${type}_SUCCESS`,
+        payload: result
+      })),
+      catchError(error => of({
+        type: `${type}_FAILURE`,
+        error: true,
+        payload: error
+      }))
+    );
+
+    // Dispatch the action Observable
+    dispatch(actionObservable);
+
+    // Return the action Observable
+    return actionObservable as Observable<Action<T>>;
   };
 }
 
