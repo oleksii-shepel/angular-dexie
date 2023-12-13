@@ -152,7 +152,7 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
     } else if (typeof action === 'object' && action.type) {
       // If the action is an object, it's an AsyncAction
       // Automatically bind dispatch and getState to the AsyncAction
-      return actionSubject.next(of(action));
+      actionSubject.next(of(action));
     }
   }
 
