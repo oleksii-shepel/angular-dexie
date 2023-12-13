@@ -84,11 +84,11 @@ function isDate(val: any): boolean {
   return typeof val.toDateString === "function" && typeof val.getDate === "function" && typeof val.setDate === "function";
 }
 
-export type Reducer<T> = (state: T | undefined, action: AsyncAction<any>) => T | undefined
+export type Reducer<T> = (state: T | undefined, action: Action<any>) => T | undefined
 
 
 export interface Store<K> {
-  dispatch: (action: Observable<Action<any>> | AsyncAction<any>) => any;
+  dispatch: (action: Observable<Action<any>> | AsyncAction<any> | Action<any>) => any;
   getState: () => K;
   replaceReducer: (newReducer: Reducer<any>) => void;
   pipe: (...operators: Array<UnaryFunction<Observable<K>, Observable<any>>>) => Observable<any>;
@@ -141,14 +141,18 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
     }
   }
 
-  function dispatch(action: Observable<Action<any>> | AsyncAction<any>): any {
+  function dispatch(action: Observable<Action<any>> | AsyncAction<any> | Action<any>): any {
     if (action instanceof Observable) {
       // Handle Observable actions without subscribing
       actionSubject.next(action);
     } else if (typeof action === 'function') {
       // If the action is a function, it's an AsyncAction
       // Automatically bind dispatch and getState to the AsyncAction
-      return (dispatch: Function, getState?: Function) => action(dispatch, getState);
+      return (dispatch: Function, getState?: Function) => actionSubject.next(action(dispatch, getState));
+    } else if (typeof action === 'object' && action.type) {
+      // If the action is an object, it's an AsyncAction
+      // Automatically bind dispatch and getState to the AsyncAction
+      return actionSubject.next(of(action));
     }
   }
 
@@ -157,18 +161,18 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
       throw new Error(`Expected the nextReducer to be a function. Instead, received: '${kindOf(nextReducer)}`);
     }
     currentReducer = nextReducer;
-    dispatch(of({
+    dispatch({
       type: actionTypes_default.REPLACE
-    }));
+    });
   }
 
   function pipe(...operators: Array<UnaryFunction<Observable<K>, Observable<any>>>): Observable<any> {
     return operators.reduce((source, operator) => operator(source), currentState as Observable<K>);
   }
 
-  dispatch(of({
+  dispatch({
     type: actionTypes_default.INIT
-  }));
+  });
 
   return {
     dispatch,
