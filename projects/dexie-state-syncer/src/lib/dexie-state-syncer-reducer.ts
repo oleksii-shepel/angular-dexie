@@ -26,21 +26,18 @@ export const updateTree = createAction(FormActions.UpdateForm, (path: string, ob
   return result;
 });
 
-// Define the createObservable function
-// The createObservable function now accepts a variable number of arguments for the operation
 function createObservable<T>(
   type: string,
   operation?: (...args: any[]) => (dispatch: Function, getState?: Function) => T | Promise<T> | Observable<T>
 ) {
   return (...args: any[]) => (dispatch: Function, getState?: Function): Observable<Action<T>> => {
-    // Dispatch an Observable of the request action
+    // Create an Observable of the request action
     const requestAction = of({ type: `${type}_REQUEST` });
     dispatch(requestAction);
 
-    // If no operation is provided, return an Observable of a simple action
+    // If no operation is provided, create an Observable of a simple action
     if (!operation) {
       const action = of({ type, payload: args.length === 1 ? args[0] : args });
-      dispatch(action);
       return action as Observable<Action<T>>;
     }
 
@@ -70,24 +67,24 @@ function createObservable<T>(
       }))
     );
 
-    // Dispatch the action Observable
-    dispatch(actionObservable);
-
-    // Return the action Observable
-    return actionObservable as Observable<Action<T>>;
+    // Combine the request action with the action Observable
+    return requestAction.pipe(
+      concatMap(() => actionObservable)
+    );
   };
 }
 
 
+
 export const initTreeObservable = createObservable('INIT_TREE', (obj: any) => {
   return (dispatch: Function, getState?: Function): Promise<any> => {
-    return getState!().writer.initialize(obj);
+    return getState && getState()?.writer.initialize(obj);
   };
 });
 
 export const updateTreeObservable = createObservable('UPDATE_TREE', (path: string, obj: any) => {
   return (dispatch: Function, getState?: Function): Promise<any> => {
-    return getState!().writer.update(path, obj);
+    return getState && getState()?.writer.update(path, obj);
   };
 });
 
