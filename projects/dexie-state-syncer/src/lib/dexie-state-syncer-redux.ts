@@ -1,8 +1,9 @@
-import { BehaviorSubject, Observable, Observer, Subject, Subscription, UnaryFunction, concatMap, iif, map, of, switchMap, tap } from "rxjs";
+import { AsyncSubject, BehaviorSubject, Observable, Observer, Subject, Subscription, UnaryFunction, concatMap, iif, map, of, switchMap, tap } from "rxjs";
 import { Semaphore } from "./dexie-state-syncer-semaphore";
 import { Action, AsyncAction } from "./dexie-state-syncer-actions";
 import { AnyFn } from "./dexie-state-syncer-selectors";
 import { loggerMiddleware } from "src/app/app.module";
+import { AsyncObserver, CustomAsyncSubject, toObservable } from "./dexie-state-syncer-behaviour-subject";
 
 function isAction(action: any): boolean {
   return isPlainObject(action) && "type" in action && typeof action.type === "string";
@@ -93,7 +94,7 @@ export interface Store<K> {
   getState: () => K;
   replaceReducer: (newReducer: Reducer<any>) => void;
   pipe: (...operators: Array<UnaryFunction<Observable<K>, Observable<any>>>) => Observable<any>;
-  subscribe: (next?: AnyFn | Observer<any>, error?: AnyFn, complete?: AnyFn) => Subscription;
+  subscribe: (next?: AnyFn | Observer<any>, error?: AnyFn, complete?: AnyFn) => Promise<Subscription>;
 }
 
 function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhancer?: Function): Store<K> {
@@ -119,7 +120,7 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
   }
 
   let currentReducer = reducer;
-  let currentState = new BehaviorSubject<K>(preloadedState as K);
+  let currentState = new CustomAsyncSubject<K>(preloadedState as K);
   let actionSubject = new Subject<Observable<Action<any>>>();
   let isDispatching = false;
   let actionQueue = actionSubject.pipe(
@@ -135,11 +136,11 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
     return currentState.value;
   }
 
-  function subscribe(next?: AnyFn | Observer<any>, error?: AnyFn, complete?: AnyFn): Subscription {
+  async function subscribe(next?: AnyFn | Observer<any>, error?: AnyFn, complete?: AnyFn): Promise<Subscription> {
     if (typeof next === 'function') {
-      return currentState.subscribe({next, error, complete});
+      return await currentState.subscribe({next, error, complete});
     } else {
-      return currentState.subscribe(next as Partial<Observer<any>>);
+      return await currentState.subscribe(next as Partial<AsyncObserver<any>>);
     }
   }
 
@@ -169,7 +170,7 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
   }
 
   function pipe(...operators: Array<UnaryFunction<Observable<K>, Observable<any>>>): Observable<any> {
-    return operators.reduce((source, operator) => operator(source), currentState as Observable<K>);
+    return operators.reduce((source, operator) => operator(source), toObservable<K>(currentState));
   }
 
   dispatch({
