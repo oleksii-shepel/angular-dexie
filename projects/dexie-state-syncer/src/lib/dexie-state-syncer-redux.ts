@@ -2,6 +2,7 @@ import { BehaviorSubject, Observable, Observer, Subject, Subscription, UnaryFunc
 import { Semaphore } from "./dexie-state-syncer-semaphore";
 import { Action, AsyncAction } from "./dexie-state-syncer-actions";
 import { AnyFn } from "./dexie-state-syncer-selectors";
+import { loggerMiddleware } from "src/app/app.module";
 
 function isAction(action: any): boolean {
   return isPlainObject(action) && "type" in action && typeof action.type === "string";
@@ -122,6 +123,7 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
   let actionSubject = new Subject<Observable<Action<any>>>();
   let isDispatching = false;
   let actionQueue = actionSubject.pipe(
+    loggerMiddleware(),
     concatMap(action => action),
     tap(() => isDispatching = true),
     map((action) => currentReducer(currentState.value, action)),
@@ -148,7 +150,7 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
     } else if (typeof action === 'function') {
       // If the action is a function, it's an AsyncAction
       // Automatically bind dispatch and getState to the AsyncAction
-      return (dispatch: Function, getState?: Function) => actionSubject.next(action(dispatch, getState));
+      return actionSubject.next(action(dispatch, getState));
     } else if (typeof action === 'object' && action.type) {
       // If the action is an object, it's an AsyncAction
       // Automatically bind dispatch and getState to the AsyncAction
