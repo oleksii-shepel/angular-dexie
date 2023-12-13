@@ -1,4 +1,4 @@
-import { AsyncSubject, BehaviorSubject, Observable, Observer, Subject, Subscription, UnaryFunction, concatMap, iif, map, of, switchMap, tap } from "rxjs";
+import { AsyncSubject, BehaviorSubject, Observable, Observer, Subject, Subscription, UnaryFunction, concatMap, from, iif, map, of, switchMap, tap } from "rxjs";
 import { Semaphore } from "./dexie-state-syncer-semaphore";
 import { Action, AsyncAction } from "./dexie-state-syncer-actions";
 import { AnyFn } from "./dexie-state-syncer-selectors";
@@ -128,7 +128,8 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
     loggerMiddleware(),
     tap(() => isDispatching = true),
     map((action) => currentReducer(currentState.value, action)),
-    tap(state => (currentState.next(state), isDispatching = false))
+    concatMap(state => from(currentState.next(state))),
+    tap(() => isDispatching = false)
   ).subscribe();
 
 
