@@ -123,8 +123,8 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
   let actionSubject = new Subject<Observable<Action<any>>>();
   let isDispatching = false;
   let actionQueue = actionSubject.pipe(
-    loggerMiddleware(),
     concatMap(action => action),
+    loggerMiddleware(),
     tap(() => isDispatching = true),
     map((action) => currentReducer(currentState.value, action)),
     tap(state => (currentState.next(state), isDispatching = false))
