@@ -43,27 +43,15 @@ export class AsyncObservable<T> {
   }
 
   async notify(value: T): Promise<void> {
-    for (const observer of this.observers) {
-      if (observer.next) {
-        await observer.next(value);
-      }
-    }
+    await Promise.all(this.observers.map(observer => observer.next(value)));
   }
 
   async notifyError(error: any): Promise<void> {
-    for (const observer of this.observers) {
-      if (observer.error) {
-        await observer.error(error);
-      }
-    }
+    await Promise.all(this.observers.map(observer => observer.error && observer.error(error)));
   }
 
   async notifyComplete(): Promise<void> {
-    for (const observer of this.observers) {
-      if (observer.complete) {
-        await observer.complete();
-      }
-    }
+    await Promise.all(this.observers.map(observer => observer.complete && observer.complete()));
   }
 }
 

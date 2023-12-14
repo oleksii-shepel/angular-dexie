@@ -1,5 +1,5 @@
-import { Observable } from 'rxjs';
-import { InMemoryObjectState, Middleware, applyMiddleware, createStore } from 'dexie-state-syncer';
+import { Observable, defer, first, of, switchMap } from 'rxjs';
+import { InMemoryObjectState, MiddlewareOperator, applyMiddleware, createStore } from 'dexie-state-syncer';
 import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 
@@ -22,10 +22,18 @@ export const tree = new InMemoryObjectState();
 // }
 
 // Define a type for the middleware function that works with any type T
-export type MiddlewareOperator<T> = (source: Observable<T>) => Observable<T>;
+
+// Custom operator that waits for a condition observable to emit true.
+export function waitUntil<T>(conditionFn: () => Observable<boolean>): MiddlewareOperator<T> {
+  return (source: Observable<T>) => (dispatch: Function, getState: Function) =>
+    defer(conditionFn).pipe(
+      first(value => value === true), // Wait until the condition observable emits true
+      switchMap(() => source)         // Then switch to the source observable
+    );
+}
 
 // Logger middleware as an RxJS operator
-export const loggerMiddleware = <T>(): MiddlewareOperator<T> => (source: Observable<T>) =>
+export const loggerMiddleware = <T>(): MiddlewareOperator<T> => (source: Observable<T>) => (dispatch: Function, getState: Function) =>
   new Observable<T>((observer) => {
     return source.subscribe({
       next: (action) => {
@@ -39,7 +47,7 @@ export const loggerMiddleware = <T>(): MiddlewareOperator<T> => (source: Observa
   });
 
 // Thunk middleware as an RxJS operator
-export const thunkMiddleware = <T>(dispatch: Function, getState: Function): MiddlewareOperator<T> => (source: Observable<T>) =>
+export const thunkMiddleware = <T>(): MiddlewareOperator<T> => (source: Observable<T>) => (dispatch: Function, getState: Function) =>
   new Observable<T>((observer) => {
     return source.subscribe({
       next: async (action: T | Function) => {
@@ -60,6 +68,32 @@ export const thunkMiddleware = <T>(dispatch: Function, getState: Function): Midd
     });
   });
 
+// Custom operator that waits for a notifier observable to emit true.
+// export function waitUntil<T>(notifier: Observable<boolean>): MiddlewareOperator<T> {
+//   return (source: Observable<T>) =>
+//     new Observable<T>((subscriber) => {
+//       const subscription = notifier.pipe(filter(value => value), take(1)).subscribe({
+//         next: () => {
+//           source.subscribe({
+//             next: (value) => subscriber.next(value),
+//             error: (err) => subscriber.error(err),
+//             complete: () => subscriber.complete(),
+//           });
+//         },
+//         error: (err) => subscriber.error(err),
+//       });
+
+//       return () => {
+//         subscription.unsubscribe();
+//       };
+//     });
+// }
+//       return () => {
+//         subscription.unsubscribe();
+//       };
+//     });
+// }
+
 
 function rootReducer(state: any, action: any) {
   return tree.descriptor();
@@ -74,7 +108,16 @@ function rootReducer(state: any, action: any) {
   providers: [
     {
       provide: 'Store',
-      useFactory: () => createStore(rootReducer, tree.descriptor())
+      useFactory: () => {
+        const operatorFunctions = [
+          waitUntil(() => of(true)),
+          loggerMiddleware(),
+          thunkMiddleware(),
+          // ... any additional operator functions ...
+        ];
+        return createStore(rootReducer, tree.descriptor(), applyMiddleware(...operatorFunctions))
+      }
+
     }
   ],
   bootstrap: [AppComponent]

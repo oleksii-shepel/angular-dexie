@@ -1,8 +1,6 @@
-import { AsyncSubject, BehaviorSubject, Observable, Observer, Subject, Subscription, UnaryFunction, concatMap, from, iif, map, of, switchMap, tap } from "rxjs";
-import { Semaphore } from "./dexie-state-syncer-semaphore";
+import { Observable, Observer, Subject, Subscription, UnaryFunction, concatMap, from, last, map, of, scan, tap } from "rxjs";
 import { Action, AsyncAction } from "./dexie-state-syncer-actions";
 import { AnyFn } from "./dexie-state-syncer-selectors";
-import { loggerMiddleware } from "src/app/app.module";
 import { AsyncObserver, CustomAsyncSubject, toObservable } from "./dexie-state-syncer-behaviour-subject";
 
 function isAction(action: any): boolean {
@@ -95,9 +93,23 @@ export interface Store<K> {
   replaceReducer: (newReducer: Reducer<any>) => void;
   pipe: (...operators: Array<UnaryFunction<Observable<K>, Observable<any>>>) => Observable<any>;
   subscribe: (next?: AnyFn | Observer<any>, error?: AnyFn, complete?: AnyFn) => Promise<Subscription>;
+  subscription: Subscription;
+  middlewares?: Array<UnaryFunction<Observable<K>, Observable<any>>>;
 }
 
 function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhancer?: Function): Store<K> {
+
+  let currentReducer = reducer;
+  let currentState = new CustomAsyncSubject<K>(preloadedState as K);
+  let actionSubject = new Subject<Observable<Action<any>>>();
+  let isDispatching = false;
+  let store = {
+    dispatch,
+    getState,
+    replaceReducer,
+    pipe,
+    subscribe
+  } as any;
 
   if (typeof reducer !== "function") {
     throw new Error(`Expected the root reducer to be a function. Instead, received: '${kindOf(reducer)}'`);
@@ -116,22 +128,19 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
     if (typeof enhancer !== "function") {
       throw new Error(`Expected the enhancer to be a function. Instead, received: '${kindOf(enhancer)}'`);
     }
-    return enhancer(createStore)(reducer, preloadedState);
+    store = enhancer(createStore)(reducer, preloadedState);
   }
 
-  let currentReducer = reducer;
-  let currentState = new CustomAsyncSubject<K>(preloadedState as K);
-  let actionSubject = new Subject<Observable<Action<any>>>();
-  let isDispatching = false;
-  let actionQueue = actionSubject.pipe(
+  const pipeline = store.middlewares || ((source: Observable<any>) => [(dispatch: Function, getState: Function) => source]);
+  const subscription = actionSubject.pipe(
     concatMap(action => action),
-    loggerMiddleware(),
+    concatMap(action => of(action).pipe(pipeline)),
     tap(() => isDispatching = true),
-    map((action) => currentReducer(currentState.value, action)),
-    concatMap(state => from(currentState.next(state))),
+    scan((state, action) => currentReducer(state, action), preloadedState),
+    last(),
+    concatMap((state: any) => from(currentState.next(state))),
     tap(() => isDispatching = false)
   ).subscribe();
-
 
   function getState(): K {
     return currentState.value;
@@ -183,7 +192,8 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
     getState,
     replaceReducer,
     pipe,
-    subscribe
+    subscribe,
+    subscription
   }
 }
 
@@ -268,47 +278,26 @@ export interface Middleware {
   (store: any): (next: (action: any) => any) => Promise<(action: any) => any> | any;
 }
 
-function composeMiddleware(...funcs: Middleware[]): Function {
-  if (funcs.length === 0) {
-    return (next: any) => (action: any) => action;
-  }
+export type MiddlewareOperator<T> = (source: Observable<T>) => (dispatch: Function, getState: Function) => Observable<T>;
 
-  const reducer = (a: Middleware, b: Middleware) => {
-    return (next: any) => async (action: any) => {
-      return await a(await b(next))(action);
-    };
-  };
-
-  const composed = funcs.length === 1? funcs[0] : funcs.reduce(reducer);
-
-  const semaphore = new Semaphore(1);
-
-  return (next: any) => {
-    return async (action: any) => {
-      return await semaphore.callFunction(async () => {
-        return await composed(next)(action);
-      });
-    };
-  };
-}
-
-function applyMiddleware(...middlewares: Middleware[]) {
-  return (createStore: Function) => (reducer: Function, preloadedState: any) => {
+// applyMiddleware function that accepts operator functions
+function applyMiddleware(...operatorFunctions: MiddlewareOperator<any>[]) {
+  return (createStore: Function) => (reducer: Function, preloadedState?: any) => {
     const store = createStore(reducer, preloadedState);
-    let dispatch = (action: any, ...args: any[]) => {
-      throw new Error("Dispatching while constructing your middleware is not allowed. Other middleware would not be applied to this dispatch.");
+
+    // Create a pipeline function that takes dispatch and getState
+    const middlewares = (source: Observable<any>) => {
+      let result = source;
+      operatorFunctions.forEach(fn => {
+        result = fn(result)(store.dispatch, store.getState);
+      });
+      return result;
     };
-    const middlewareAPI = {
-      getState: () => store.getState(),
-      dispatch: (action: any, ...args: any[]) => dispatch(action, ...args)
-    };
-    const chain = middlewares.map((middleware) => middleware(middlewareAPI));
-    dispatch = composeMiddleware(...chain)(store.dispatch);
     return {
       ...store,
-      dispatch
+      middlewares
     };
-  }
+  };
 }
 
 export {
