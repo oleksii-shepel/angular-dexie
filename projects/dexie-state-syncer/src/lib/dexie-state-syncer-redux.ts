@@ -99,17 +99,11 @@ export interface Store<K> {
 
 function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhancer?: Function): Store<K> {
 
+  let store = { dispatch, getState, replaceReducer, pipe, subscribe } as any;
+  let actionStream = new Subject<Observable<Action<any>>>();
+  let currentState = new CustomAsyncSubject<K>();
   let currentReducer = reducer;
-  let currentState = new CustomAsyncSubject<K>(preloadedState as K);
-  let actionSubject = new Subject<Observable<Action<any>>>();
   let isDispatching = false;
-  let store = {
-    dispatch,
-    getState,
-    replaceReducer,
-    pipe,
-    subscribe
-  } as any;
 
   if (typeof reducer !== "function") {
     throw new Error(`Expected the root reducer to be a function. Instead, received: '${kindOf(reducer)}'`);
@@ -132,7 +126,7 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
   }
 
   const pipeline = store.middlewares || ((source: Observable<any>) => [(dispatch: Function, getState: Function) => source]);
-  const subscription = actionSubject.pipe(
+  const subscription = actionStream.pipe(
     concatMap(action => action),
     concatMap(action => of(action).pipe(pipeline)),
     tap(() => isDispatching = true),
@@ -157,13 +151,13 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
   function dispatch(action: Observable<Action<any>> | AsyncAction<any> | Action<any>): any {
     if (action instanceof Observable) {
       // Handle Observable actions
-      actionSubject.next(action);
+      actionStream.next(action);
     } else if (typeof action === 'function') {
       // If the action is a function, it's an AsyncAction
-      return actionSubject.next(action(dispatch, getState));
+      return actionStream.next(action(dispatch, getState));
     } else if (typeof action === 'object' && action.type) {
       // If the action is an object, it's an Action
-      actionSubject.next(of(action));
+      actionStream.next(of(action));
     }
   }
 
