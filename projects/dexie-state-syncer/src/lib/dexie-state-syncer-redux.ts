@@ -279,14 +279,14 @@ export interface Middleware {
 export type MiddlewareOperator<T> = (source: Observable<T>) => (dispatch: Function, getState: Function) => Observable<T>;
 
 // applyMiddleware function that accepts operator functions
-function applyMiddleware(...operatorFunctions: MiddlewareOperator<any>[]) {
+function applyMiddleware(...operators: MiddlewareOperator<any>[]) {
   return (createStore: Function) => (reducer: Function, preloadedState?: any) => {
     const store = createStore(reducer, preloadedState);
 
     // Create a pipeline function that takes dispatch and getState
     const middlewares = (source: Observable<any>) => {
       let result = source;
-      operatorFunctions.forEach(fn => {
+      operators.forEach(fn => {
         result = fn(result)(store.dispatch, store.getState);
       });
       return result;
