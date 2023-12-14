@@ -39,25 +39,27 @@ export const loggerMiddleware = <T>(): MiddlewareOperator<T> => (source: Observa
   });
 
 // Thunk middleware as an RxJS operator
-export const thunkMiddleware = <T>(dispatch: any, getState: any): MiddlewareOperator<T> => (source: Observable<T>) =>
+export const thunkMiddleware = <T>(dispatch: Function, getState: Function): MiddlewareOperator<T> => (source: Observable<T>) =>
   new Observable<T>((observer) => {
     return source.subscribe({
-      next: async (action) => {
+      next: async (action: T | Function) => {
         if (typeof action === 'function') {
           try {
-            const result = await action(dispatch, getState);
+            // Assuming the thunk action returns a Promise of type T
+            const result: T = await (action as Function)(dispatch, getState);
             observer.next(result);
           } catch (error) {
             observer.error(error);
           }
         } else {
-          observer.next(action);
+          observer.next(action as T);
         }
       },
-      error: (err) => observer.error(err),
+      error: (err: any) => observer.error(err),
       complete: () => observer.complete(),
     });
   });
+
 
 function rootReducer(state: any, action: any) {
   return tree.descriptor();
