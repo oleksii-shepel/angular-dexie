@@ -156,15 +156,13 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
 
   function dispatch(action: Observable<Action<any>> | AsyncAction<any> | Action<any>): any {
     if (action instanceof Observable) {
-      // Handle Observable actions without subscribing
+      // Handle Observable actions
       actionSubject.next(action);
     } else if (typeof action === 'function') {
       // If the action is a function, it's an AsyncAction
-      // Automatically bind dispatch and getState to the AsyncAction
       return actionSubject.next(action(dispatch, getState));
     } else if (typeof action === 'object' && action.type) {
-      // If the action is an object, it's an AsyncAction
-      // Automatically bind dispatch and getState to the AsyncAction
+      // If the action is an object, it's an Action
       actionSubject.next(of(action));
     }
   }
