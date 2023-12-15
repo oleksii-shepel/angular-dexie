@@ -46,9 +46,13 @@ export const loggerMiddleware = <T>(): MiddlewareOperator<T> => (source: Observa
       complete: () => observer.complete(),
     });
   });
-function rootReducer(state: any, action: any) {
+
+
+  function rootReducer(state: any, action: any) {
   return tree.descriptor();
 }
+
+
 @NgModule({
   declarations: [
     AppComponent
