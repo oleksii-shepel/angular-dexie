@@ -58,8 +58,9 @@ export class AsyncObservable<T> {
 export class CustomAsyncSubject<T> extends AsyncObservable<T> {
   private _value!: T;
 
-  constructor() {
+  constructor(initialValue: T) {
     super();
+    this._value = initialValue;
   }
 
   override async subscribe(observer: Partial<AsyncObserver<T>>): Promise<Subscription> {

@@ -101,7 +101,7 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
 
   let store = { dispatch, getState, replaceReducer, pipe, subscribe } as any;
   let actionStream = new Subject<Observable<Action<any>>>();
-  let currentState = new CustomAsyncSubject<K>();
+  let currentState = new CustomAsyncSubject<K>(preloadedState as K);
   let currentReducer = reducer;
   let isDispatching = false;
 
@@ -130,7 +130,7 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
     concatMap(action => action),
     concatMap(action => of(action).pipe(pipeline)),
     tap(() => isDispatching = true),
-    scan((state, action) => currentReducer(state, action), preloadedState),
+    scan((state, action) => currentReducer(state, action), currentState.value),
     last(),
     concatMap((state: any) => from(currentState.next(state))),
     tap(() => isDispatching = false)
@@ -154,7 +154,7 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
       actionStream.next(action);
     } else if (typeof action === 'function') {
       // If the action is a function, it's an AsyncAction
-      return actionStream.next(action(dispatch, getState));
+      actionStream.next(action(dispatch, getState));
     } else if (typeof action === 'object' && action.type) {
       // If the action is an object, it's an Action
       actionStream.next(of(action));
@@ -279,12 +279,11 @@ function applyMiddleware(...operators: MiddlewareOperator<any>[]) {
 
     // Create a pipeline function that takes dispatch and getState
     const middlewares = (source: Observable<any>) => {
-      let result = source;
-      operators.forEach(fn => {
-        result = fn(result)(store.dispatch, store.getState);
-      });
-      return result;
+      return operators.reduce((result, fn) => {
+        return fn(result)(store.dispatch, store.getState);
+      }, source);
     };
+
     return {
       ...store,
       middlewares

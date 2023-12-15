@@ -1,7 +1,7 @@
 import { ProfilePage, initialProfilePage } from './dexie-state-syncer-models';
 import { ActionReducer, combineReducers } from '@ngrx/store';
 import { ObjectState, createAction, Action, AsyncAction } from 'dexie-state-syncer';
-import { EMPTY, Observable, catchError, concatMap, from, map, of, switchMap,tap } from 'rxjs';
+import { EMPTY, Observable, catchError, concat, concatMap, from, map, of, switchMap,tap } from 'rxjs';
 
 export enum FormActions {
   UpdateForm = '@forms/form/update',
@@ -31,11 +31,7 @@ function createObservable<T>(
   operation?: (...args: any[]) => (dispatch: Function, getState?: Function) => T | Promise<T> | Observable<T>
 ) {
   return (...args: any[]) => (dispatch: Function, getState?: Function): Observable<Action<T>> => {
-    // Create an Observable of the request action
-    const requestAction = of({ type: `${type}_REQUEST` });
-    dispatch(requestAction);
-
-    // If no operation is provided, create an Observable of a simple action
+    // If no operation is provided or the operation is synchronous, create an Observable of a simple action
     if (!operation) {
       const action = of({ type, payload: args.length === 1 ? args[0] : args });
       return action as Observable<Action<T>>;
@@ -44,49 +40,69 @@ function createObservable<T>(
     // Execute the operation and handle the result
     const operationResult = operation(...args)(dispatch, getState);
 
-    // Convert the operation result to an Observable if it's not already one
-    let resultObservable: Observable<T>;
-    if (operationResult instanceof Promise) {
-      resultObservable = from(operationResult);
-    } else if (operationResult instanceof Observable) {
-      resultObservable = operationResult;
-    } else {
-      resultObservable = of(operationResult);
+    // If the operation is asynchronous, create an Observable of the request action
+    if (operationResult instanceof Promise || operationResult instanceof Observable) {
+      const requestAction = of({ type: `${type}_REQUEST` });
+
+      // Convert the operation result to an Observable if it's not already one
+      let resultObservable: Observable<T>;
+      if (operationResult instanceof Promise) {
+        resultObservable = from(operationResult);
+      } else {
+        resultObservable = operationResult;
+      }
+
+      // Map the result to an Observable of Action<T>
+      const actionObservable = resultObservable.pipe(
+        map(result => ({
+          type: `${type}_SUCCESS`,
+          payload: result
+        })),
+        catchError(error => of({
+          type: `${type}_FAILURE`,
+          error: true,
+          payload: error
+        }))
+      );
+
+      // Combine the request action with the action Observable
+      return concat(requestAction, actionObservable);
     }
 
-    // Map the result to an Observable of Action<T>
-    const actionObservable = resultObservable.pipe(
-      map(result => ({
-        type: `${type}_SUCCESS`,
-        payload: result
-      })),
-      catchError(error => of({
-        type: `${type}_FAILURE`,
-        error: true,
-        payload: error
-      }))
-    );
-
-    // Combine the request action with the action Observable
-    return requestAction.pipe(
-      concatMap(() => actionObservable)
-    );
+    // If the operation is synchronous, create an Observable of a simple action
+    const action = of({ type, payload: operationResult });
+    return action as Observable<Action<T>>;
   };
 }
 
 
 
+
+
 export const initTreeObservable = createObservable('INIT_TREE', (obj: any) => {
   return (dispatch: Function, getState?: Function): Promise<any> => {
-    return getState && getState()?.writer.initialize(obj);
+    const state = getState!();
+    if (state && state.writer) {
+      return state.writer.initialize(obj);
+    } else {
+      // Return a resolved Promise when state or state.writer is undefined
+      return Promise.resolve(undefined);
+    }
   };
 });
 
 export const updateTreeObservable = createObservable('UPDATE_TREE', (path: string, obj: any) => {
   return (dispatch: Function, getState?: Function): Promise<any> => {
-    return getState && getState()?.writer.update(path, obj);
+    const state = getState!();
+    if (state && state.writer) {
+      return state.writer.update(path, obj);
+    } else {
+      // Return a resolved Promise when state or state.writer is undefined
+      return Promise.resolve(undefined);
+    }
   };
 });
+
 
 
 
