@@ -131,7 +131,6 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
     concatMap(action => pipeline(action)),
     tap(() => isDispatching = true),
     scan((state, action) => currentReducer(state, action), currentState.value),
-    last(),
     concatMap((state: any) => from(currentState.next(state))),
     tap(() => isDispatching = false)
   ).subscribe();
