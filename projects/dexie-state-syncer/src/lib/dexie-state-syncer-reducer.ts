@@ -1,6 +1,6 @@
 import { ProfilePage, initialProfilePage } from './dexie-state-syncer-models';
 import { ActionReducer, combineReducers } from '@ngrx/store';
-import { ObjectState, createAction, Action, AsyncAction } from 'dexie-state-syncer';
+import { createAction, Action, AsyncAction } from 'dexie-state-syncer';
 import { EMPTY, Observable, catchError, concat, concatMap, from, map, of, switchMap,tap } from 'rxjs';
 
 export enum FormActions {
@@ -54,7 +54,7 @@ function createObservable<T>(
 
       // Map the result to an Observable of Action<T>
       const actionObservable = resultObservable.pipe(
-        map(result => ({
+        concatMap(result => of({
           type: `${type}_SUCCESS`,
           payload: result
         })),
@@ -79,6 +79,7 @@ function createObservable<T>(
 
 
 
+
 export const initTreeObservable = createObservable('INIT_TREE', (obj: any) => {
   return (dispatch: Function, getState?: Function): Promise<any> => {
     const state = getState!();
@@ -92,6 +93,32 @@ export const initTreeObservable = createObservable('INIT_TREE', (obj: any) => {
 });
 
 export const updateTreeObservable = createObservable('UPDATE_TREE', (path: string, obj: any) => {
+  return (dispatch: Function, getState?: Function): Promise<any> => {
+    const state = getState!();
+    if (state && state.writer) {
+      return state.writer.update(path, obj);
+    } else {
+      // Return a resolved Promise when state or state.writer is undefined
+      return Promise.resolve(undefined);
+    }
+  };
+});
+
+
+export const updateTreeObservable1 = createObservable('UPDATE_TREE1', (path: string, obj: any) => {
+  return (dispatch: Function, getState?: Function): Promise<any> => {
+    const state = getState!();
+    if (state && state.writer) {
+      return state.writer.update(path, obj);
+    } else {
+      // Return a resolved Promise when state or state.writer is undefined
+      return Promise.resolve(undefined);
+    }
+  };
+});
+
+
+export const updateTreeObservable2 = createObservable('UPDATE_TREE2', (path: string, obj: any) => {
   return (dispatch: Function, getState?: Function): Promise<any> => {
     const state = getState!();
     if (state && state.writer) {

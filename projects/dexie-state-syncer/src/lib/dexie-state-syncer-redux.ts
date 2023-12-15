@@ -1,7 +1,8 @@
-import { Observable, Observer, Subject, Subscription, UnaryFunction, concatMap, from, last, map, of, scan, tap } from "rxjs";
+import { Observable, Observer, Subject, Subscription, UnaryFunction, concatMap, from, last, map, mergeMap, of, scan, tap } from "rxjs";
 import { Action, AsyncAction } from "./dexie-state-syncer-actions";
 import { AnyFn } from "./dexie-state-syncer-selectors";
 import { AsyncObserver, CustomAsyncSubject, toObservable } from "./dexie-state-syncer-behaviour-subject";
+import { thunkMiddleware } from "src/app/app.module";
 
 function isAction(action: any): boolean {
   return isPlainObject(action) && "type" in action && typeof action.type === "string";
@@ -100,7 +101,7 @@ export interface Store<K> {
 function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhancer?: Function): Store<K> {
 
   let store = { dispatch, getState, replaceReducer, pipe, subscribe } as any;
-  let actionStream = new Subject<Observable<Action<any>>>();
+  let actionStream = new Subject<Observable<Action<any>> | AsyncAction<any>>();
   let currentState = new CustomAsyncSubject<K>(preloadedState as K);
   let currentReducer = reducer;
   let isDispatching = false;
@@ -127,8 +128,7 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
 
   const pipeline = store.middlewares || ((source: Observable<any>) => [(dispatch: Function, getState: Function) => source]);
   const subscription = actionStream.pipe(
-    concatMap(action => action),
-    concatMap(action => of(action).pipe(pipeline)),
+    concatMap(action => pipeline(action)),
     tap(() => isDispatching = true),
     scan((state, action) => currentReducer(state, action), currentState.value),
     last(),
@@ -154,7 +154,7 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
       actionStream.next(action);
     } else if (typeof action === 'function') {
       // If the action is a function, it's an AsyncAction
-      actionStream.next(action(dispatch, getState));
+      actionStream.next(action);
     } else if (typeof action === 'object' && action.type) {
       // If the action is an object, it's an Action
       actionStream.next(of(action));
