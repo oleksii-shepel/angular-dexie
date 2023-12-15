@@ -18,8 +18,6 @@ export function waitUntil<T>(conditionFn: () => Observable<boolean>): Middleware
 }
 
 // Instantiate the Semaphore with the desired maximum concurrency
-const semaphore = new Semaphore(1);
-
 export const thunkMiddleware = (): MiddlewareOperator<any> => {
   return (source: Observable<Action<any>> | AsyncAction<any>) => (dispatch: Function, getState: Function) => {
     if (typeof source === 'function') {
@@ -48,56 +46,6 @@ export const loggerMiddleware = <T>(): MiddlewareOperator<T> => (source: Observa
       complete: () => observer.complete(),
     });
   });
-
-// Thunk middleware as an RxJS operator
-// export const thunkMiddleware = <T>(): MiddlewareOperator<T> => (source: Observable<T>) => (dispatch: Function, getState: Function) =>
-//   new Observable<T>((observer) => {
-//     return source.subscribe({
-//       next: async (action: T | Function) => {
-//         if (typeof action === 'function') {
-//           try {
-//             // Assuming the thunk action returns a Promise of type T
-//             const result: T = await (action as Function)(dispatch, getState);
-//             observer.next(result);
-//           } catch (error) {
-//             observer.error(error);
-//           }
-//         } else {
-//           observer.next(action as T);
-//         }
-//       },
-//       error: (err: any) => observer.error(err),
-//       complete: () => observer.complete(),
-//     });
-//   });
-
-// Custom operator that waits for a notifier observable to emit true.
-// export function waitUntil<T>(notifier: Observable<boolean>): MiddlewareOperator<T> {
-//   return (source: Observable<T>) =>
-//     new Observable<T>((subscriber) => {
-//       const subscription = notifier.pipe(filter(value => value), take(1)).subscribe({
-//         next: () => {
-//           source.subscribe({
-//             next: (value) => subscriber.next(value),
-//             error: (err) => subscriber.error(err),
-//             complete: () => subscriber.complete(),
-//           });
-//         },
-//         error: (err) => subscriber.error(err),
-//       });
-
-//       return () => {
-//         subscription.unsubscribe();
-//       };
-//     });
-// }
-//       return () => {
-//         subscription.unsubscribe();
-//       };
-//     });
-// }
-
-
 function rootReducer(state: any, action: any) {
   return tree.descriptor();
 }

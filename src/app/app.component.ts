@@ -1,5 +1,5 @@
 import { Component, Inject, OnInit } from '@angular/core';
-import { Store, initTreeObservable, updateTreeObservable } from 'dexie-state-syncer';
+import { Store, initTreeObservable, updateTreeObservable, updateTreeObservable1, updateTreeObservable2 } from 'dexie-state-syncer';
 import { selectTree } from './selectors';
 
 @Component({
@@ -77,8 +77,35 @@ export class AppComponent implements OnInit {
       k: 'sadas'
     }));
 
-     let timeout = setTimeout(() => {
-       this.store.dispatch(updateTreeObservable('b', {
+    this.store.dispatch(updateTreeObservable('b', {
+      c: 'asd',
+      d: 'sadf',
+      e : {
+        f: 'dfasdasdasd',
+        g: 'gevrevre'
+      }
+    }));
+
+    this.store.dispatch(updateTreeObservable1('b', {
+      c: 'asd',
+      d: 'sadf',
+      e : {
+        f: 'dfasdasdasd',
+        g: 'gevrevre'
+      }
+    }));
+
+    this.store.dispatch(updateTreeObservable2('b', {
+      c: 'asd',
+      d: 'sadf',
+      e : {
+        f: 'dfasdasdasd',
+        g: 'gevrevre'
+      }
+    }));
+
+    let timeout = setTimeout(() => {
+      this.store.dispatch(updateTreeObservable('b', {
         c: 'asd',
         d: 'sadf',
         e : {
