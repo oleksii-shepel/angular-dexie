@@ -89,7 +89,7 @@ export type Reducer<T> = (state: T | undefined, action: Action<any>) => T | unde
 
 
 export interface Store<K> {
-  dispatch: (action: Observable<Action<any>> | AsyncAction<any> | Action<any>) => any;
+  dispatch: (action: AsyncAction<any> | Action<any>) => any;
   getState: () => K;
   replaceReducer: (newReducer: Reducer<any>) => void;
   pipe: (...operators: Array<UnaryFunction<Observable<K>, Observable<any>>>) => Observable<any>;
@@ -147,11 +147,8 @@ function createStore<K>(reducer: Function, preloadedState?: K | undefined, enhan
     }
   }
 
-  function dispatch(action: Observable<Action<any>> | AsyncAction<any> | Action<any>): any {
-    if (action instanceof Observable) {
-      // Handle Observable actions
-      actionStream.next(action);
-    } else if (typeof action === 'function') {
+  function dispatch(action: AsyncAction<any> | Action<any>): any {
+    if (typeof action === 'function') {
       // If the action is a function, it's an AsyncAction
       actionStream.next(action);
     } else if (typeof action === 'object' && action.type) {
