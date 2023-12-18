@@ -1,4 +1,4 @@
-import { Subscription, Observable } from 'rxjs';
+import { Observable, Subscription } from 'rxjs';
 
 
 export function toObservable<T>(customAsyncSubject: CustomAsyncSubject<T>): Observable<T> {

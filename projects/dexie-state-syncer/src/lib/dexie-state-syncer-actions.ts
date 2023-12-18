@@ -1,6 +1,5 @@
 import { Observable } from "rxjs";
 import { kindOf } from "./dexie-state-syncer-redux";
-import { AnyFn } from "./dexie-state-syncer-selectors";
 
 export interface Action<T = any> {
   type: string;

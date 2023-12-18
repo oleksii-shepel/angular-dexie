@@ -1,4 +1,3 @@
-import { Observable, OperatorFunction } from 'rxjs';
 
 interface Request {
   resolve: (value?: unknown) => void;

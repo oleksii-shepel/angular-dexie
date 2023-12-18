@@ -1,6 +1,6 @@
-import { primitive } from "./dexie-state-syncer-reducer";
-import { StateDescriptor, StateNode, StateObjectDatabase } from './dexie-state-syncer-db';
 import Dexie from "dexie";
+import { StateDescriptor, StateNode, StateObjectDatabase } from './dexie-state-syncer-db';
+import { primitive } from "./dexie-state-syncer-reducer";
 
 
 export class StateObjectInMemoryDatabase extends StateObjectDatabase {

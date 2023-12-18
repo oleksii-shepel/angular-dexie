@@ -1,8 +1,7 @@
-import { Observable, Observer, Subject, Subscription, UnaryFunction, concatMap, from, last, map, mergeMap, of, scan, tap } from "rxjs";
+import { Observable, Observer, Subject, Subscription, UnaryFunction, concatMap, from, of, scan, tap } from "rxjs";
 import { Action, AsyncAction } from "./dexie-state-syncer-actions";
-import { AnyFn } from "./dexie-state-syncer-selectors";
 import { AsyncObserver, CustomAsyncSubject, toObservable } from "./dexie-state-syncer-behaviour-subject";
-import { thunkMiddleware } from "src/app/app.module";
+import { AnyFn } from "./dexie-state-syncer-selectors";
 
 function isAction(action: any): boolean {
   return isPlainObject(action) && "type" in action && typeof action.type === "string";
@@ -288,12 +287,11 @@ function applyMiddleware(...operators: MiddlewareOperator<any>[]) {
 }
 
 export {
-  actionTypes_default as __DO_NOT_USE__ActionTypes,
-  kindOf,
-  applyMiddleware,
+  actionTypes_default as __DO_NOT_USE__ActionTypes, applyMiddleware,
   combineReducers,
   compose,
   createStore,
   isAction,
-  isPlainObject
+  isPlainObject, kindOf
 };
+
