@@ -1,5 +1,5 @@
 import { ActionReducer, combineReducers } from '@ngrx/store';
-import { Action } from './dexie-state-syncer-actions';
+import { Action, createAction } from './dexie-state-syncer-actions';
 import { ProfilePage, initialProfilePage } from './dexie-state-syncer-models';
 
 
@@ -152,93 +152,6 @@ export function deepClone(objectToClone: any) {
   }
 
   return obj;
-}
-
-export const forms = (initialState: any, logging: {showAll?: boolean, showRegular?: boolean, showDeferred?: boolean, showOnlyModifiers?: boolean, showMatch?: RegExp} = {}) => (reducer: ActionReducer<any>): any => {
-
-  const metaReducer = async (state: any, action: any) => {
-    state = state ? state: initialState;
-    let writer = state.descriptor().writer;
-
-    console.log('state', state);
-    console.log('action', action);
-
-    if(action.type === FormActionsInternal.AutoInit) {
-      await writer.initialize({
-        a: 'sdsd',
-        b: {
-          c: 'asd',
-          d: 'sadf',
-          e : {
-            f: 'dfasdasdasd',
-            g: 'gevrevre'
-          }
-        },
-        i: {
-          j: 'dsfsdf'
-        },
-        k: 'sadas'
-      });
-      return state;
-    } else if(action.type === FormActions.UpdateForm) {
-      await writer.update('b', {
-        c: 'asd',
-        d: 'sadf',
-        e : {
-          f: 'dfasdasdasd',
-          g: 'gevrevre'
-        }
-      });
-      return state;
-    }
-    //return reducer(state, action);
-    return state;
-  }
-
-  return metaReducer;
-}
-
-
-export const logger = (settings: {showAll?: boolean, showRegular?: boolean, showDeferred?: boolean, showOnlyModifiers?: boolean, showMatch?: RegExp}) => (state: any, nextState: any, action: any) => {
-  settings = Object.assign({showAll: false, showRegular: false, showDeferred: false, showOnlyModifiers: true}, settings);
-
-  function filter(action: any, equal: any): boolean {
-    let show = false;
-    if(settings.showMatch && action.type.match(settings.showMatch)) {
-      show = true;
-    }
-    if(settings.showRegular && !action.deferred) {
-      show = true;
-    }
-    if(settings.showDeferred && action.deferred) {
-      show = true;
-    }
-    if(settings.showOnlyModifiers && !equal) {
-      show = true;
-    }
-    if(settings.showAll) {
-      show = true;
-    }
-    return show;
-  }
-
-  const actionCopy = deepClone(action);
-  delete actionCopy.type;
-
-  const actionPath = actionCopy?.path ?? '';
-  delete actionCopy?.path;
-
-  const before = actionPath.length > 0 ? getValue(state, actionPath) : state;
-  const after = actionPath.length > 0 ? getValue(nextState, actionPath) : nextState;
-  const equal = deepEqual(before, after);
-
-  if(filter(action, equal)) {
-    console.groupCollapsed("%c%s%c", action.deferred ? "color: blue;" : "color: black;", action.type, "color: black;");
-    console.log("path: '%c%s%c', payload: %o", "color: red;", actionPath, "color: black;", actionCopy);
-    console.log(after);
-    console.groupEnd();
-  }
-  return nextState;
 }
 
 export interface ApplicationState {

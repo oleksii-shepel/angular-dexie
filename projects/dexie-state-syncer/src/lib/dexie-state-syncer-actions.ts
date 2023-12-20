@@ -21,7 +21,7 @@ export interface AsyncAction<T = any> {
 export type SyncFunction<T> = (...args: any[]) => (dispatch: Function, getState?: Function) => T;
 export type AsyncFunction<T> = (...args: any[]) => (dispatch: Function, getState?: Function) => Promise<T>;
 
-function createAction<T>(
+export function createAction<T>(
   type: string,
   operation?: (...args: any[]) => (dispatch: Function, getState?: Function) => T | Promise<T> | Observable<T>
 ) {
