@@ -1,6 +1,5 @@
 import { Component, Inject, OnInit } from '@angular/core';
 import { Store, initTreeObservable, updateTreeObservable, updateTreeObservable1, updateTreeObservable2 } from 'dexie-state-syncer';
-import { selectTree } from './selectors';
 
 @Component({
   selector: 'app-root',
@@ -54,12 +53,12 @@ export class AppComponent implements OnInit {
 
   ngOnInit() {
 
-    const stateSelector = selectTree('');
-    this.store.subscribe(async (value) => {
-      // Use the already instantiated stateSelector function to get the derived state
-      let derivedState = await stateSelector(value);
-      console.log(derivedState);
-    });
+    // const stateSelector = selectTree('');
+    // this.store.subscribe(async (value) => {
+    //   // Use the already instantiated stateSelector function to get the derived state
+    //   let derivedState = await stateSelector(value);
+    //   console.log(derivedState);
+    // });
 
     this.store.dispatch(initTreeObservable({
       a: 'sdsd',

@@ -1,27 +1,27 @@
 import { ModuleWithProviders, NgModule } from "@angular/core";
-import { FeatureModule, MainModule, initializeStore, loadModule } from "./dexie-state-syncer-redux";
+import { FeatureModule, MainModule, Store, combineReducers, createStore, loadModule, supervisor } from "./dexie-state-syncer-redux";
 
 @NgModule({})
 export class StoreModule {
-  static store: any;
-
-  static forRoot(module: MainModule): ModuleWithProviders<StoreModule> {
-    const store = initializeStore(module);
+  static store: any = undefined;
+  static forRoot(module: MainModule, initialize?: (module: MainModule) => Store<any>): ModuleWithProviders<StoreModule> {
     return {
       ngModule: StoreModule,
       providers: [
-        { provide: 'Store', useValue: store }
+        {
+          provide: 'Store',
+          useFactory: () => (StoreModule.store = StoreModule.store ?? (initialize ? initialize(module): createStore(combineReducers(module.reducers), supervisor(module))), StoreModule.store)
+        }
       ]
     };
   }
-
-  static forFeature(module: FeatureModule): ModuleWithProviders<StoreModule> {
-    loadModule(StoreModule.store, module);
+  static forFeature(module: FeatureModule, initialize?: (store: Store<any>, module: FeatureModule) => void): ModuleWithProviders<StoreModule> {
+    if(!StoreModule.store) {
+      throw new Error('Store is not initialized. Have you forgot to call forRoot method?');
+    }
+    initialize? initialize(StoreModule.store, module) : loadModule(StoreModule.store, module);
     return {
       ngModule: StoreModule,
-      providers: [
-        // Other providers...
-      ]
     };
   }
 }

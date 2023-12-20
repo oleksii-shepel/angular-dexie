@@ -1,10 +1,10 @@
-import { Observable, Subscription, concatMap, defer, first, from, of, switchMap } from 'rxjs';
-import { Action, AsyncAction, InMemoryObjectState, MiddlewareOperator, applyMiddleware, createStore } from 'dexie-state-syncer';
 import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
+import { Action, AsyncAction, InMemoryObjectState, MainModule, MiddlewareOperator, Reducer, StoreModule, combineReducers, createStore, supervisor } from 'dexie-state-syncer';
+import { Observable, defer, first, switchMap } from 'rxjs';
 
+import { RouterModule, Routes } from '@angular/router';
 import { AppComponent } from './app.component';
-import { Semaphore } from 'projects/dexie-state-syncer/src/lib/dexie-state-syncer-semaphore';
 
 export const tree = new InMemoryObjectState();
 
@@ -17,21 +17,70 @@ export function waitUntil<T>(conditionFn: () => Observable<boolean>): Middleware
     );
 }
 
-// Instantiate the Semaphore with the desired maximum concurrency
+// Thunk middleware
+// export const thunkMiddleware = (): MiddlewareOperator<any> => {
+//   return (source: Observable<Action<any>> | AsyncAction<any>) => (dispatch: Function, getState: Function) => {
+//     if (typeof source === 'function') {
+//       // If the source is a function, it's an AsyncAction
+//       source = source(dispatch, getState);
+//     } else if(!(source instanceof Observable)){
+//       // If the source is neither an Observable nor a function, throw an error
+//       throw new Error('Invalid source type. Source must be an Observable or a function.');
+//     }
+//     return source;
+//   };
+// }
+
 export const thunkMiddleware = (): MiddlewareOperator<any> => {
-  return (source: Observable<Action<any>> | AsyncAction<any>) => (dispatch: Function, getState: Function) => {
-    if (typeof source === 'function') {
-      // If the source is a function, it's an AsyncAction
-      source = source(dispatch, getState);
-    } else if(!(source instanceof Observable)){
-      // If the source is neither an Observable nor a function, throw an error
-      throw new Error('Invalid source type. Source must be an Observable or a function.');
-    }
-    return source;
+  return (source: any | AsyncAction<any>) => (dispatch: Function, getState: Function) => {
+    return new Observable<any>((observer) => {
+      let result;
+      if (typeof source === 'function') {
+        // If the source is a function, it's an AsyncAction
+        result = source(dispatch, getState);
+      } else {
+        // If the source is not a function, it's an Action
+        observer.next(source);
+      }
+      observer.complete();
+      return result;
+    });
   };
-}
+};
 
 
+
+
+export const sagaMiddleware = <T>(saga: (action: T) => Generator<Promise<any>, void, any>): MiddlewareOperator<T> => {
+  return (source: Observable<T>) => (dispatch: Function, getState: Function) => {
+    return new Observable(observer => {
+      const subscription = source.subscribe({
+        next(action) {
+          const iterator = saga(action);
+          resolveIterator(iterator);
+        },
+        error(err) { observer.error(err); },
+        complete() { observer.complete(); }
+      });
+
+      function resolveIterator(iterator: Iterator<Promise<any>>) {
+        const { value, done } = iterator.next();
+
+        if (!done) {
+          value.then(result => {
+            iterator.next(result);
+            resolveIterator(iterator);
+          });
+        }
+      }
+
+      // Return teardown logic
+      return () => {
+        subscription.unsubscribe();
+      };
+    });
+  };
+};
 
 // Logger middleware as an RxJS operator
 export const loggerMiddleware = <T>(): MiddlewareOperator<T> => (source: Observable<T>) => (dispatch: Function, getState: Function) =>
@@ -47,10 +96,22 @@ export const loggerMiddleware = <T>(): MiddlewareOperator<T> => (source: Observa
     });
   });
 
-
-  function rootReducer(state: any, action: any) {
-  return tree.descriptor();
+function rootMetaReducer(reducer: Reducer<any>) {
+  return function (state: any, action: Action<any>) {
+    if (action.type === 'INIT_TREE' || action.type === 'UPDATE_TREE') {
+      state = tree.descriptor();
+      return state;
+    }
+    return reducer(state, action);
+  };
 }
+
+
+const routes: Routes = [
+  { path: '', component: AppComponent },
+  { path: 'customers', loadChildren: () => import('../customers/customers.module').then(m => m.CustomersModule)},
+  { path: 'suppliers', loadChildren: () => import('../suppliers/suppliers.module').then(m => m.SuppliersModule)},
+];
 
 
 @NgModule({
@@ -58,21 +119,17 @@ export const loggerMiddleware = <T>(): MiddlewareOperator<T> => (source: Observa
     AppComponent
   ],
   imports: [
-    BrowserModule
+    BrowserModule,
+    RouterModule.forRoot(routes),
+    StoreModule.forRoot({
+      transformers: [thunkMiddleware()],
+      processors: [loggerMiddleware()],
+      reducers: {
+      },
+      sideEffects: []
+    }, (module: MainModule) => createStore(rootMetaReducer(combineReducers(module.reducers)), supervisor(module)))
   ],
   providers: [
-    {
-      provide: 'Store',
-      useFactory: () => {
-        const operatorFunctions = [
-          thunkMiddleware(),
-          loggerMiddleware(),
-          // ... any additional operator functions ...
-        ];
-        return createStore(rootReducer, tree.descriptor(), applyMiddleware(...operatorFunctions))
-      }
-
-    }
   ],
   bootstrap: [AppComponent]
 })
