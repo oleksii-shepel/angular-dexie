@@ -1,7 +1,7 @@
 import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 import { Action, InMemoryObjectState, MainModule, MiddlewareOperator, Reducer, StoreModule, combineReducers, createStore, supervisor } from 'dexie-state-syncer';
-import { Observable, defer, first, switchMap } from 'rxjs';
+import { EMPTY, Observable, defer, first, switchMap } from 'rxjs';
 
 import { RouterModule, Routes } from '@angular/router';
 import { AppComponent } from './app.component';
@@ -17,35 +17,15 @@ export function waitUntil<T>(conditionFn: () => Observable<boolean>): Middleware
     );
 }
 
-// Thunk middleware
-// export const thunkMiddleware = (): MiddlewareOperator<any> => {
-//   return (source: Observable<Action<any>> | AsyncAction<any>) => (dispatch: Function, getState: Function) => {
-//     if (typeof source === 'function') {
-//       // If the source is a function, it's an AsyncAction
-//       source = source(dispatch, getState);
-//     } else if(!(source instanceof Observable)){
-//       // If the source is neither an Observable nor a function, throw an error
-//       throw new Error('Invalid source type. Source must be an Observable or a function.');
-//     }
-//     return source;
-//   };
-// }
-
 export const thunkMiddleware = (): MiddlewareOperator<any> => {
   return (source: any) => (dispatch: Function, getState: Function) => {
     if (typeof source === 'function') {
       // If the source is a function, it's an AsyncAction
-      source = source(dispatch, getState);
-    } else if(!(source instanceof Observable)){
-      // If the source is neither an Observable nor a function, throw an error
-      throw new Error('Invalid source type. Source must be an Observable or a function.');
+      return source(dispatch, getState);
     }
-    return source;
+    return EMPTY;
   };
 }
-
-
-
 
 export const sagaMiddleware = <T>(saga: (action: T) => Generator<Promise<any>, void, any>): MiddlewareOperator<T> => {
   return (source: Observable<T>) => (dispatch: Function, getState: Function) => {
