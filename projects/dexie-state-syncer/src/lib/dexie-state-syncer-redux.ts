@@ -1,4 +1,4 @@
-import { Observable, Observer, Subject, Subscription, UnaryFunction, concatMap, firstValueFrom, from, of, scan, tap } from "rxjs";
+import { Observable, Observer, Subject, Subscription, UnaryFunction, concatMap, from, map, of, scan, tap } from "rxjs";
 import { Action, AsyncAction } from "./dexie-state-syncer-actions";
 import { AsyncObserver, CustomAsyncSubject, toObservable } from "./dexie-state-syncer-behaviour-subject";
 import { AnyFn } from "./dexie-state-syncer-selectors";
@@ -94,14 +94,14 @@ export interface FeatureModule {
   slice: string;
   state: any;
   reducer: Reducer<any>;
-  sideEffects: SideEffect[];
+  effects: SideEffect[];
 }
 
 export interface MainModule {
   transformers: MiddlewareOperator<any>[];
   processors: MiddlewareOperator<any>[];
   reducers: Record<string, Reducer<any>>;
-  sideEffects: SideEffect[];
+  effects: SideEffect[];
 }
 
 export interface Store<K> extends MainModule {
@@ -155,20 +155,25 @@ export function supervisor<K>(mainModule: MainModule) {
 
         // Handle specific actions
         switch (action.type) {
-          case actions.ENABLE_TRANSFORMERS:
-            enableTransformers(store, action.payload);
+          case actions.INIT_STORE:
             break;
-          case actions.SETUP_PROCESSORS:
-            setupProcessors(store, action.payload);
-            break;
-          case actions.REGISTER_EFFECTS:
-            registerEffects(store, action.payload);
+          case actions.LOAD_MODULE:
+            loadModule(store, action.payload);
             break;
           case actions.UNLOAD_MODULE:
             unloadModule(store, action.payload);
             break;
+          case actions.ENABLE_TRANSFORMERS:
+            enableTransformers(store, ...action.payload);
+            break;
+          case actions.SETUP_PROCESSORS:
+            setupProcessors(store, ...action.payload);
+            break;
+          case actions.REGISTER_EFFECTS:
+            registerEffects(store, ...action.payload);
+            break;
           case actions.UNREGISTER_EFFECTS:
-            unregisterEffects(store, action.payload);
+            unregisterEffects(store, ...action.payload);
             break;
           default:
             break;
@@ -182,47 +187,26 @@ export function supervisor<K>(mainModule: MainModule) {
     store.dispatch(actionCreators.initStore(mainModule));
     store.dispatch(actionCreators.enableTransformers(mainModule.transformers));
     store.dispatch(actionCreators.setupProcessors(mainModule.processors));
-    store.dispatch(actionCreators.registerEffects(mainModule.sideEffects));
+    store.dispatch(actionCreators.registerEffects(mainModule.effects));
 
     return store;
   };
 }
 
-async function isActionObservable(obj: any): Promise<boolean> {
-  if (obj instanceof Observable) {
-    let isAction = false;
-    try {
-      await firstValueFrom(
-        obj.pipe(
-          tap(value => {
-            if (typeof value === 'object' && typeof value.type === 'string') {
-              isAction = true;
-            }
-          })
-        )
-      );
-    } catch (error) {
-      console.error(error);
-    }
-    return isAction;
-  } else {
-    return false;
-  }
-}
-
 export type StoreCreator<K> = (reducer: Reducer<any>, preloadedState?: K | undefined, enhancer?: Function) => Store<any>;
 
-
 function createStore<K>(reducer: Reducer<any>, preloadedState?: K | undefined, enhancer?: Function): Store<K> {
-  let transformers: any;
-  let processors: any;
-  let reducers: Record<string, Reducer<any>> = {};
-  let sideEffects: SideEffect[] = [];
 
-  let store = { dispatch, getState, replaceReducer, pipe, subscribe, transformers, processors, reducers, sideEffects} as any;
+  let store = { dispatch, getState, replaceReducer, pipe, subscribe } as any;
+
+  store.transformers = store.transformers || ((source: Observable<any>) => [(dispatch: Function, getState: Function) => source]);
+  store.processors = store.processors || ((source: Observable<any>) => [(dispatch: Function, getState: Function) => source]);
+  store.reducers = store.reducers || {};
+  store.effects = store.effects || [];
+
   let actionStream = new Subject<Observable<Action<any>> | AsyncAction<any>>();
   let currentState = new CustomAsyncSubject<K>(preloadedState as K);
-  let currentReducer = reducer;
+  let currentReducer = combineReducers(store.reducers);
   let isDispatching = false;
 
   if (typeof reducer !== "function") {
@@ -245,9 +229,9 @@ function createStore<K>(reducer: Reducer<any>, preloadedState?: K | undefined, e
     store = enhancer(createStore)(reducer, preloadedState);
   }
 
-  const pipeline = store.middlewares || ((source: Observable<any>) => [(dispatch: Function, getState: Function) => source]);
   const subscription = actionStream.pipe(
-    concatMap(action => pipeline(action)),
+    concatMap(action => store.transformers(action)),
+    map(action => store.processors(action)),
     tap(() => isDispatching = true),
     scan((state, action: any) => currentReducer(state, action), currentState.value),
     concatMap((state: any) => from(currentState.next(state))),
@@ -295,10 +279,7 @@ function createStore<K>(reducer: Reducer<any>, preloadedState?: K | undefined, e
   });
 
   return {
-    transformers,
-    processors,
-    reducers,
-    sideEffects,
+    ...store,
     dispatch,
     getState,
     replaceReducer,
@@ -315,7 +296,7 @@ function loadModule(store: Store<any>, module: FeatureModule) {
 
   // Replace the store's reducer
   store.replaceReducer(newRootReducer);
-  store.dispatch(actionCreators.registerEffects(module.sideEffects));
+  store.dispatch(actionCreators.registerEffects(module.effects));
 }
 
 function unloadModule(store: Store<any>, module: FeatureModule) {
@@ -324,7 +305,7 @@ function unloadModule(store: Store<any>, module: FeatureModule) {
 
   // Replace the store's reducer
   store.replaceReducer(combineReducers(remainingReducers));
-  store.dispatch(actionCreators.unregisterEffects(module.sideEffects));
+  store.dispatch(actionCreators.unregisterEffects(module.effects));
 }
 
 
@@ -434,9 +415,7 @@ function applyMiddleware(...operators: MiddlewareOperator<any>[]) {
 function enableTransformers(store: Store<any>, ...operators: MiddlewareOperator<any>[]) {
   // Create a pipeline function that takes dispatch and getState
   const transformers  = (source: Observable<any>) => {
-    return operators.reduce((result, fn) => {
-      return fn(result)(store.dispatch, store.getState);
-    }, source);
+    return operators.map(fn => fn(source)(store.dispatch, store.getState));
   };
 
   // Enhance the store with transformers
@@ -455,13 +434,13 @@ function setupProcessors(store: Store<any>, ...operators: MiddlewareOperator<any
   store.processors = processors as any;
 }
 
-function registerEffects(store: Store<any>, ...sideEffects: SideEffect[]) {
-  store.sideEffects = [...store.sideEffects, ...sideEffects];
+function registerEffects(store: Store<any>, ...effects: SideEffect[]) {
+  store.effects = [...store.effects, ...effects];
 }
 
-function unregisterEffects(store: Store<any>, ...sideEffects: SideEffect[]) {
-  // Remove the effects from the store's sideEffects array
-  store.sideEffects = store.sideEffects.filter(effect => !sideEffects.includes(effect));
+function unregisterEffects(store: Store<any>, ...effects: SideEffect[]) {
+  // Remove the effects from the store's effects array
+  store.effects = store.effects.filter(effect => !effects.includes(effect));
 }
 
 

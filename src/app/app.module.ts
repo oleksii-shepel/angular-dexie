@@ -32,21 +32,17 @@ export function waitUntil<T>(conditionFn: () => Observable<boolean>): Middleware
 // }
 
 export const thunkMiddleware = (): MiddlewareOperator<any> => {
-  return (source: any | AsyncAction<any>) => (dispatch: Function, getState: Function) => {
-    return new Observable<any>((observer) => {
-      let result;
-      if (typeof source === 'function') {
-        // If the source is a function, it's an AsyncAction
-        result = source(dispatch, getState);
-      } else {
-        // If the source is not a function, it's an Action
-        observer.next(source);
-      }
-      observer.complete();
-      return result;
-    });
+  return (source: Observable<Action<any>> | AsyncAction<any>) => (dispatch: Function, getState: Function) => {
+    if (typeof source === 'function') {
+      // If the source is a function, it's an AsyncAction
+      source = source(dispatch, getState);
+    } else if(!(source instanceof Observable)){
+      // If the source is neither an Observable nor a function, throw an error
+      throw new Error('Invalid source type. Source must be an Observable or a function.');
+    }
+    return source;
   };
-};
+}
 
 
 
@@ -126,7 +122,7 @@ const routes: Routes = [
       processors: [loggerMiddleware()],
       reducers: {
       },
-      sideEffects: []
+      effects: []
     }, (module: MainModule) => createStore(rootMetaReducer(combineReducers(module.reducers)), supervisor(module)))
   ],
   providers: [

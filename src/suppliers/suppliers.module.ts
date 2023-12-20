@@ -45,7 +45,7 @@ export class SupplierComponent implements OnInit {
       slice: 'suppliers',
       state: suppliersData,
       reducer: suppliersReducer,
-      sideEffects: []
+      effects: []
     })
   ],
 })

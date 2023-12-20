@@ -45,7 +45,7 @@ export class CustomerComponent implements OnInit {
       slice: 'customers',
       state: customersData,
       reducer: customersReducer,
-      sideEffects: []
+      effects: []
     })
   ]
 })
