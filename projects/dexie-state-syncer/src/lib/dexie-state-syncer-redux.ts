@@ -1,4 +1,4 @@
-import { Observable, Observer, Subject, Subscription, UnaryFunction, concatMap, from, map, of, scan, tap } from "rxjs";
+import { Observable, Observer, Subject, Subscription, UnaryFunction, concatMap, from, of, scan, tap } from "rxjs";
 import { Action, AsyncAction } from "./dexie-state-syncer-actions";
 import { AsyncObserver, CustomAsyncSubject, toObservable } from "./dexie-state-syncer-behaviour-subject";
 import { AnyFn } from "./dexie-state-syncer-selectors";
@@ -146,13 +146,12 @@ export function supervisor<K>(mainModule: MainModule) {
     // Enhance the dispatch function
     const originalDispatch = store.dispatch;
     store.dispatch = (action: Action<any> | AsyncAction<any>) => {
-      if (typeof action === 'function') {
-        // Handle AsyncAction
-        return action(store.dispatch, store.getState);
-      } else {
-        // Handle Action
-        let result = originalDispatch(action);
 
+      // Handle Action
+      let result = originalDispatch(action);
+
+      action = action as Action<any>;
+      if(action?.type) {
         // Handle specific actions
         switch (action.type) {
           case actions.INIT_STORE:
@@ -178,9 +177,9 @@ export function supervisor<K>(mainModule: MainModule) {
           default:
             break;
         }
-
-        return result;
       }
+
+      return result;
     };
 
     // Initialize the store with the main module
@@ -199,8 +198,8 @@ function createStore<K>(reducer: Reducer<any>, preloadedState?: K | undefined, e
 
   let store = { dispatch, getState, replaceReducer, pipe, subscribe } as any;
 
-  store.transformers = store.transformers || ((source: Observable<any>) => [(dispatch: Function, getState: Function) => source]);
-  store.processors = store.processors || ((source: Observable<any>) => [(dispatch: Function, getState: Function) => source]);
+  store.transformers = store.transformers || ((action: any) => action);
+  store.processors = store.processors || ((action: any) => action);
   store.reducers = store.reducers || {};
   store.effects = store.effects || [];
 
@@ -231,7 +230,7 @@ function createStore<K>(reducer: Reducer<any>, preloadedState?: K | undefined, e
 
   const subscription = actionStream.pipe(
     concatMap(action => store.transformers(action)),
-    map(action => store.processors(action)),
+    concatMap(action => store.processors(of(action))),
     tap(() => isDispatching = true),
     scan((state, action: any) => currentReducer(state, action), currentState.value),
     concatMap((state: any) => from(currentState.next(state))),
@@ -254,7 +253,7 @@ function createStore<K>(reducer: Reducer<any>, preloadedState?: K | undefined, e
     if (typeof action === 'function') {
       // If the action is a function, it's an AsyncAction
       actionStream.next(action);
-    } else if (typeof action === 'object' && action.type) {
+    } else if (typeof action === 'object' && action?.type) {
       // If the action is an object, it's an Action
       actionStream.next(of(action));
     }
@@ -413,20 +412,23 @@ function applyMiddleware(...operators: MiddlewareOperator<any>[]) {
 
 // applyTransformers function that accepts operator functions
 function enableTransformers(store: Store<any>, ...operators: MiddlewareOperator<any>[]) {
-  // Create a pipeline function that takes dispatch and getState
-  const transformers  = (source: Observable<any>) => {
-    return operators.map(fn => fn(source)(store.dispatch, store.getState));
-  };
-
-  // Enhance the store with transformers
-  store.transformers = transformers as any;
+  store.transformers = ((source: any) => {
+    let result: any;
+    operators.some(fn => typeof fn === 'function' && (result = fn(source)(store.dispatch, store.getState)) instanceof Observable);
+    if (typeof result === 'undefined') {
+      throw new Error(`Transformers chain fails to find right conversion function. The provided input is of type ${kindOf(source)}`);
+    }
+    return result;
+  }) as any;
 }
+
+
 
 function setupProcessors(store: Store<any>, ...operators: MiddlewareOperator<any>[]) {
   // Create a pipeline function that takes dispatch and getState
-  const processors = (source: Observable<any>) => (dispatch: Function, getState: Function) => {
+  const processors = (source: Observable<any>) => {
     return operators.reduce((result, fn) => {
-      return fn(result)(dispatch, getState);
+      return fn(result)(store.dispatch, store.getState);
     }, source);
   };
 

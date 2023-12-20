@@ -1,6 +1,6 @@
 import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
-import { Action, AsyncAction, InMemoryObjectState, MainModule, MiddlewareOperator, Reducer, StoreModule, combineReducers, createStore, supervisor } from 'dexie-state-syncer';
+import { Action, InMemoryObjectState, MainModule, MiddlewareOperator, Reducer, StoreModule, combineReducers, createStore, supervisor } from 'dexie-state-syncer';
 import { Observable, defer, first, switchMap } from 'rxjs';
 
 import { RouterModule, Routes } from '@angular/router';
@@ -32,7 +32,7 @@ export function waitUntil<T>(conditionFn: () => Observable<boolean>): Middleware
 // }
 
 export const thunkMiddleware = (): MiddlewareOperator<any> => {
-  return (source: Observable<Action<any>> | AsyncAction<any>) => (dispatch: Function, getState: Function) => {
+  return (source: any) => (dispatch: Function, getState: Function) => {
     if (typeof source === 'function') {
       // If the source is a function, it's an AsyncAction
       source = source(dispatch, getState);
