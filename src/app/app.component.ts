@@ -60,6 +60,10 @@ export class AppComponent implements OnInit {
     //   console.log(derivedState);
     // });
 
+    function* rootSaga(): Generator<Promise<any>, any, any> {
+      console.log('Hello from saga');
+    };
+
     this.store.dispatch(initTreeObservable({
       a: 'sdsd',
       b: {
@@ -75,6 +79,8 @@ export class AppComponent implements OnInit {
       },
       k: 'sadas'
     }));
+
+    this.store.dispatch(rootSaga);
 
     this.store.dispatch(updateTreeObservable('b', {
       c: 'asd',

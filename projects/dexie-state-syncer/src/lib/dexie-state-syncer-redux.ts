@@ -105,7 +105,7 @@ export interface MainModule {
 }
 
 export interface Store<K> extends MainModule {
-  dispatch: (action: AsyncAction<any> | Action<any>) => any;
+  dispatch: (action: AsyncAction<any> | Action<any> | (() => AsyncGenerator<Promise<any>, any, any>) | (() => Generator<Promise<any>, any, any>)) => any;
   getState: () => K;
   replaceReducer: (newReducer: Reducer<any>) => void;
   pipe: (...operators: Array<UnaryFunction<Observable<K>, Observable<any>>>) => Observable<any>;
@@ -145,7 +145,7 @@ export function supervisor<K>(mainModule: MainModule) {
 
     // Enhance the dispatch function
     const originalDispatch = store.dispatch;
-    store.dispatch = (action: Action<any> | AsyncAction<any>) => {
+    store.dispatch = (action: Action<any> | AsyncAction<any> | (() => AsyncGenerator<Promise<any>, any, any>) | (() => Generator<Promise<any>, any, any>)) => {
 
       // Handle Action
       let result = originalDispatch(action);
@@ -203,7 +203,7 @@ function createStore<K>(reducer: Reducer<any>, preloadedState?: K | undefined, e
   store.reducers = store.reducers || {};
   store.effects = store.effects || [];
 
-  let actionStream = new ReplaySubject<Observable<Action<any>> | AsyncAction<any>>();
+  let actionStream = new ReplaySubject<Observable<Action<any>> | AsyncAction<any> | AsyncGenerator<Promise<any>, any, any> | Generator<Promise<any>, any, any>>();
   let currentState = new CustomAsyncSubject<K>(preloadedState as K);
   let currentReducer = combineReducers(store.reducers);
   let isDispatching = false;
@@ -253,13 +253,13 @@ function createStore<K>(reducer: Reducer<any>, preloadedState?: K | undefined, e
     }
   }
 
-  function dispatch(action: AsyncAction<any> | Action<any>): any {
-    if (typeof action === 'function') {
+  function dispatch(action: AsyncAction<any> | Action<any> | AsyncGenerator<Promise<any>, any, any> | Generator<Promise<any>, any, any>): any {
+    if (typeof action === 'function' || action instanceof (function*(){}.constructor) || action instanceof (async function*(){}.constructor)) {
       // If the action is a function, it's an AsyncAction
-      actionStream.next(action);
-    } else if (typeof action === 'object' && action?.type) {
+      actionStream.next(action as any);
+    } else if (typeof action === 'object' && (action as any)?.type) {
       // If the action is an object, it's an Action
-      actionStream.next(of(action));
+      actionStream.next(of(action as any));
     }
   }
 
@@ -389,7 +389,7 @@ export interface Middleware {
   (store: any): (next: (action: any) => any) => Promise<(action: any) => any> | any;
 }
 
-export type MiddlewareOperator<T> = (source: Observable<T>) => (dispatch: Function, getState: Function) => Observable<any>;
+export type MiddlewareOperator<T> = (source: any) => (dispatch: Function, getState: Function) => Observable<any>;
 
 // applyMiddleware function that accepts operator functions
 function applyMiddleware(...operators: MiddlewareOperator<any>[]) {
@@ -414,7 +414,7 @@ function applyMiddleware(...operators: MiddlewareOperator<any>[]) {
 function enableTransformers(store: Store<any>, ...operators: MiddlewareOperator<any>[]) {
   store.transformers = ((source: any) => {
     let result: any;
-    operators.some(fn => typeof fn === 'function' && (result = fn(source)(store.dispatch, store.getState)) instanceof Observable);
+    operators.some(fn => (result = fn(source)(store.dispatch, store.getState)) instanceof Observable);
     if (typeof result === 'undefined') {
       throw new Error(`Transformers chain fails to find right conversion function. The provided input is of type ${kindOf(source)}`);
     }

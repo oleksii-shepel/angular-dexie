@@ -1,7 +1,7 @@
 import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 import { Action, InMemoryObjectState, MainModule, MiddlewareOperator, Reducer, StoreModule, combineReducers, createStore, supervisor } from 'dexie-state-syncer';
-import { EMPTY, Observable, Subject, concat, defer, first, switchMap } from 'rxjs';
+import { Observable, Subject, concat, defer, first, switchMap } from 'rxjs';
 
 import { RouterModule, Routes } from '@angular/router';
 import { AppComponent } from './app.component';
@@ -20,61 +20,47 @@ export function waitUntil<T>(conditionFn: () => Observable<boolean>): Middleware
 export const thunkMiddleware = (): MiddlewareOperator<any> => {
   return (source: any) => (dispatch: Function, getState: Function) => {
     if (typeof source === 'function') {
-      // If the source is a function, it's an AsyncAction
-      return source(dispatch, getState);
+      if (source.constructor.name !== 'GeneratorFunction' && source.constructor.name !== 'AsyncGeneratorFunction' ) {
+        // Handle thunk
+        return source(dispatch, getState);
+      }
     }
-    return EMPTY;
+    // If the source is not a function or is a generator function, return it unmodified
+    return source;
   };
 }
 
-export const sagaMiddleware = <T>(saga: (action: T) => Generator<Promise<any>, void, any> | AsyncGenerator<Promise<any>, void, any>): MiddlewareOperator<T> => {
-  return (source: Observable<T>) => (dispatch: Function, getState: Function) => {
+export const sagaMiddleware = <T>(): MiddlewareOperator<T> => {
+  return (source: () => Generator<Promise<any>, void, any> | AsyncGenerator<Promise<any>, void, any>) => (dispatch: Function, getState: Function) => {
     return new Observable(observer => {
-      const subscription = source.subscribe({
-        async next(action) {
-          const iterator = saga(action);
-          await resolveIterator(iterator);
-        },
-        error(err) { observer.error(err); },
-        complete() { observer.complete(); }
-      });
+      const iterator = source(); // Start the saga
+      const sagaName = source.name.toUpperCase(); // Capitalize the saga name
+      observer.next({ type: `${sagaName}_STARTED` }); // Dispatch SAGA_START action with capitalized saga name
+      resolveIterator(iterator);
 
       async function resolveIterator(iterator: AsyncIterator<Promise<any>> | Iterator<Promise<any>>) {
         const { value, done } = await Promise.resolve(iterator.next());
 
         if (!done) {
           value.then(result => {
+            observer.next(result); // Dispatch the result as an action
             iterator.next(result);
             resolveIterator(iterator);
           });
+        } else {
+          observer.next({ type: `${sagaName}_FINISHED` }); // Dispatch SAGA_FINISHED action with capitalized saga name
+          observer.complete(); // Complete the Observable when the saga is done
         }
       }
 
       // Return teardown logic
       return () => {
-        subscription.unsubscribe();
+        // Handle cleanup if necessary
       };
     });
   };
 };
 
-
-function runGenerator<T>(generator: Generator<Promise<T>, T, T>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    function step({value, done}: IteratorResult<Promise<T>, T>) {
-      const promise: Promise<T> = Promise.resolve(value);
-      if (done) {
-        resolve(promise);
-      } else {
-        promise.then(
-          result => step(generator.next(result)),
-          error => step(generator.throw(error))
-        );
-      }
-    }
-    step(generator.next());
-  });
-}
 
 // Logger middleware as an RxJS operator
 export const loggerMiddleware = <T>(): MiddlewareOperator<T> => (source: Observable<T>) => (dispatch: Function, getState: Function) =>
@@ -90,6 +76,22 @@ export const loggerMiddleware = <T>(): MiddlewareOperator<T> => (source: Observa
     });
   });
 
+  function runGenerator<T>(generator: Generator<Promise<T>, T, T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+      function step({value, done}: IteratorResult<Promise<T>, T>) {
+        const promise: Promise<T> = Promise.resolve(value);
+        if (done) {
+          resolve(promise);
+        } else {
+          promise.then(
+            result => step(generator.next(result)),
+            error => step(generator.throw(error))
+          );
+        }
+      }
+      step(generator.next());
+    });
+  }
 
 export function adaptMiddleware(middleware: any): (source: Observable<any>) => (dispatch: Function, getState: Function) => Observable<any> {
   return (source: Observable<any>) => (dispatch: Function, getState: Function) => {
@@ -135,7 +137,7 @@ const routes: Routes = [
     BrowserModule,
     RouterModule.forRoot(routes),
     StoreModule.forRoot({
-      transformers: [thunkMiddleware(), sagaMiddleware(function* rootSage() {})],
+      transformers: [thunkMiddleware(), sagaMiddleware()],
       processors: [loggerMiddleware()],
       reducers: {
       },
