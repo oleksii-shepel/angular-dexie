@@ -1,86 +1,9 @@
 import { ActionReducer, combineReducers } from '@ngrx/store';
-import { Action, createAction } from 'dexie-state-syncer';
-import { Observable, catchError, concat, concatMap, from, of } from 'rxjs';
+import { Action } from './dexie-state-syncer-actions';
 import { ProfilePage, initialProfilePage } from './dexie-state-syncer-models';
 
-export enum FormActions {
-  UpdateForm = '@forms/form/update',
-  UpdateControl = '@forms/form/control/update',
-}
 
-export enum FormActionsInternal {
-  AutoInit = '@forms/form/init',
-  AutoSubmit = '@forms/form/submit',
-  FormDestroyed = '@forms/form/destroyed',
-}
-
-export const initTree = createAction(FormActionsInternal.AutoInit, (obj: any) => async (dispatch: Function, getState?: Function) => {
-  const state = getState!();
-  const result = await state.writer.initialize(obj);
-  return result;
-});
-
-export const updateTree = createAction(FormActions.UpdateForm, (path: string, obj: any) => async (dispatch: Function, getState?: Function) => {
-  const state = getState!();
-  const result = await state.writer.update(path, obj);
-  return result;
-});
-
-function createObservable<T>(
-  type: string,
-  operation?: (...args: any[]) => (dispatch: Function, getState?: Function) => T | Promise<T> | Observable<T>
-) {
-  return (...args: any[]) => (dispatch: Function, getState?: Function): Observable<Action<T>> => {
-    // If no operation is provided or the operation is synchronous, create an Observable of a simple action
-    if (!operation) {
-      const action = of({ type, payload: args.length === 1 ? args[0] : args });
-      return action as Observable<Action<T>>;
-    }
-
-    // Execute the operation and handle the result
-    const operationResult = operation(...args)(dispatch, getState);
-
-    // If the operation is asynchronous, create an Observable of the request action
-    if (operationResult instanceof Promise || operationResult instanceof Observable) {
-      const requestAction = of({ type: `${type}_REQUEST` });
-
-      // Convert the operation result to an Observable if it's not already one
-      let resultObservable: Observable<T>;
-      if (operationResult instanceof Promise) {
-        resultObservable = from(operationResult);
-      } else {
-        resultObservable = operationResult;
-      }
-
-      // Map the result to an Observable of Action<T>
-      const actionObservable = resultObservable.pipe(
-        concatMap(result => of({
-          type: `${type}_SUCCESS`,
-          payload: result
-        })),
-        catchError(error => of({
-          type: `${type}_FAILURE`,
-          error: true,
-          payload: error
-        }))
-      );
-
-      // Combine the request action with the action Observable
-      return concat(requestAction, actionObservable);
-    }
-
-    // If the operation is synchronous, create an Observable of a simple action
-    const action = of({ type, payload: operationResult });
-    return action as Observable<Action<T>>;
-  };
-}
-
-
-
-
-
-
-export const initTreeObservable = createObservable('INIT_TREE', (obj: any) => {
+export const initTreeObservable = createAction('INIT_TREE', (obj: any) => {
   return (dispatch: Function, getState?: Function): Promise<any> => {
     const state = getState!();
     if (state && state.writer) {
@@ -92,7 +15,7 @@ export const initTreeObservable = createObservable('INIT_TREE', (obj: any) => {
   };
 });
 
-export const updateTreeObservable = createObservable('UPDATE_TREE', (path: string, obj: any) => {
+export const updateTreeObservable = createAction('UPDATE_TREE', (path: string, obj: any) => {
   return (dispatch: Function, getState?: Function): Promise<any> => {
     const state = getState!();
     if (state && state.writer) {
@@ -105,7 +28,7 @@ export const updateTreeObservable = createObservable('UPDATE_TREE', (path: strin
 });
 
 
-export const updateTreeObservable1 = createObservable('UPDATE_TREE1', (path: string, obj: any) => {
+export const updateTreeObservable1 = createAction('UPDATE_TREE1', (path: string, obj: any) => {
   return (dispatch: Function, getState?: Function): Promise<any> => {
     const state = getState!();
     if (state && state.writer) {
@@ -118,7 +41,7 @@ export const updateTreeObservable1 = createObservable('UPDATE_TREE1', (path: str
 });
 
 
-export const updateTreeObservable2 = createObservable('UPDATE_TREE2', (path: string, obj: any) => {
+export const updateTreeObservable2 = createAction('UPDATE_TREE2', (path: string, obj: any) => {
   return (dispatch: Function, getState?: Function): Promise<any> => {
     const state = getState!();
     if (state && state.writer) {

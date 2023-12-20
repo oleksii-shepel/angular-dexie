@@ -1,4 +1,4 @@
-import { Observable, Observer, Subject, Subscription, UnaryFunction, concatMap, from, of, scan, tap } from "rxjs";
+import { Observable, Observer, ReplaySubject, Subscription, UnaryFunction, concatMap, from, of, scan, tap } from "rxjs";
 import { Action, AsyncAction } from "./dexie-state-syncer-actions";
 import { AsyncObserver, CustomAsyncSubject, toObservable } from "./dexie-state-syncer-behaviour-subject";
 import { AnyFn } from "./dexie-state-syncer-selectors";
@@ -203,7 +203,7 @@ function createStore<K>(reducer: Reducer<any>, preloadedState?: K | undefined, e
   store.reducers = store.reducers || {};
   store.effects = store.effects || [];
 
-  let actionStream = new Subject<Observable<Action<any>> | AsyncAction<any>>();
+  let actionStream = new ReplaySubject<Observable<Action<any>> | AsyncAction<any>>();
   let currentState = new CustomAsyncSubject<K>(preloadedState as K);
   let currentReducer = combineReducers(store.reducers);
   let isDispatching = false;
@@ -226,6 +226,10 @@ function createStore<K>(reducer: Reducer<any>, preloadedState?: K | undefined, e
       throw new Error(`Expected the enhancer to be a function. Instead, received: '${kindOf(enhancer)}'`);
     }
     store = enhancer(createStore)(reducer, preloadedState);
+  } else {
+    dispatch({
+      type: actionTypes_default.INIT
+    });
   }
 
   const subscription = actionStream.pipe(
@@ -272,10 +276,6 @@ function createStore<K>(reducer: Reducer<any>, preloadedState?: K | undefined, e
   function pipe(...operators: Array<UnaryFunction<Observable<K>, Observable<any>>>): Observable<any> {
     return operators.reduce((source, operator) => operator(source), toObservable<K>(currentState));
   }
-
-  dispatch({
-    type: actionTypes_default.INIT
-  });
 
   return {
     ...store,
