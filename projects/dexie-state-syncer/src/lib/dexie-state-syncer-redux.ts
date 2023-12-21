@@ -431,10 +431,10 @@ function enableTransformers(store: Store<any>) {
   const transformers = ((source: any) => {
     let result: any;
     store.mainModule.transformers.some(fn => (result = fn(source)(store.dispatch, store.getState)) instanceof Observable);
-    if (typeof result === 'undefined') {
+    if (typeof result === 'undefined' && !(source instanceof Observable)) {
       throw new Error(`Transformers chain fails to find right conversion function. The provided input is of type ${kindOf(source)}`);
     }
-    return result;
+    return result ?? source;
   });
 
   store.pipeline.transformers = transformers;
