@@ -217,7 +217,7 @@ function createStore<K>(reducer: Reducer<any>, preloadedState?: K | undefined, e
 
   store.pipeline.transformers = store.mainModule.transformers || ((action: any) => action);
   store.pipeline.processors = store.mainModule.processors || ((action: any) => action);
-  store.pipeline.reducer = combineReducers(store.mainModule.reducers);
+  store.pipeline.reducer = combineReducers(store.mainModule.reducers || {});
   store.pipeline.effects = store.mainModule.effects || [];
 
   let actionStream = new ReplaySubject<Observable<Action<any>> | AsyncAction<any> | AsyncGenerator<Promise<any>, any, any> | Generator<Promise<any>, any, any>>();
