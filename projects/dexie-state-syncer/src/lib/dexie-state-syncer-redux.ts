@@ -148,7 +148,7 @@ const actionCreators = {
   initStore: (module: MainModule) => ({ type: actions.INIT_STORE, payload: module }),
   loadModule: (module: FeatureModule) => ({ type: actions.LOAD_MODULE, payload: module }),
   unloadModule: (module: FeatureModule) => ({ type: actions.UNLOAD_MODULE, payload: module }),
-  enableTransformers: () => ({ type: actions.ENABLE_TRANSFORMERS }),
+  setupTransformers: () => ({ type: actions.ENABLE_TRANSFORMERS }),
   setupProcessors: () => ({ type: actions.SETUP_PROCESSORS }),
   registerEffects: () => ({ type: actions.REGISTER_EFFECTS }),
   unregisterEffects: () => ({ type: actions.UNREGISTER_EFFECTS, payload: module}),
@@ -181,16 +181,16 @@ export function supervisor<K>(mainModule: MainModule) {
             unloadModule(store, action.payload);
             break;
           case actions.ENABLE_TRANSFORMERS:
-            setupTransformers(store);
+            store.pipeline.transformers = setupTransformers(store);
             break;
           case actions.SETUP_PROCESSORS:
-            setupProcessors(store);
+            store.pipeline.processors = setupProcessors(store);
             break;
           case actions.REGISTER_EFFECTS:
-            registerEffects(store);
+            store.pipeline.effects = registerEffects(store);
             break;
           case actions.UNREGISTER_EFFECTS:
-            unregisterEffects(store, action.payload);
+            store.pipeline.effects = unregisterEffects(store, action.payload);
             break;
           default:
             break;
@@ -202,7 +202,7 @@ export function supervisor<K>(mainModule: MainModule) {
 
     // Initialize the store with the main module
     store.dispatch(actionCreators.initStore(mainModule));
-    store.dispatch(actionCreators.enableTransformers());
+    store.dispatch(actionCreators.setupTransformers());
     store.dispatch(actionCreators.setupProcessors());
     store.dispatch(actionCreators.registerEffects());
 
@@ -214,12 +214,12 @@ export type StoreCreator<K> = (reducer: Reducer<any>, preloadedState?: K | undef
 
 function createStore<K>(reducer: Reducer<any>, preloadedState?: K | undefined, enhancer?: Function): Store<K> {
 
-  let store = { dispatch, getState, replaceReducer, pipe, subscribe, pipeline: {}, mainModule: {}, modules: [] } as any;
+  let store = { dispatch, getState, replaceReducer, pipe, subscribe, pipeline: {}, mainModule: { transformers: [], processors: [], reducer: (state: any, action: Action<any>) => state, effects: [] }, modules: [] } as any;
 
-  store.pipeline.transformers = store.mainModule.transformers || ((action: any) => action);
-  store.pipeline.processors = store.mainModule.processors || ((action: any) => action);
+  store.pipeline.transformers = setupTransformers(store) || ((action: any) => action);
+  store.pipeline.processors = setupProcessors(store) || ((action: any) => action);
   store.pipeline.reducer = setupReducers(store);
-  store.pipeline.effects = store.mainModule.effects || [];
+  store.pipeline.effects = registerEffects(store) || [];
 
   let actionStream = new ReplaySubject<Observable<Action<any>> | AsyncAction<any> | AsyncGenerator<Promise<any>, any, any> | Generator<Promise<any>, any, any>>();
   let currentState = new CustomAsyncSubject<K>(preloadedState as K);
@@ -305,29 +305,55 @@ function createStore<K>(reducer: Reducer<any>, preloadedState?: K | undefined, e
   }
 }
 
-function loadModule(store: Store<any>, module: FeatureModule) {
-  // Add the module to the store's modules
-  store.modules.push(module);
+function loadModule(store: Store<any>, module: FeatureModule): Store<any> {
+  // Check if the module already exists in the store's modules
+  if (store.modules.some(m => m.slice === module.slice)) {
+    // If the module already exists, return the store without changes
+    return store;
+  }
+
+  // Create a new array with the module added to the store's modules
+  const newModules = [...store.modules, module];
 
   // Setup the reducers
-  setupReducers(store);
+  const newReducers = setupReducers(store);
 
   // Register the module's effects
-  store.dispatch(actionCreators.registerEffects());
+  const newEffects = [...store.pipeline.effects, ...module.effects];
+
+  // Return a new store with the updated properties
+  return {
+    ...store,
+    modules: newModules,
+    pipeline: {
+      ...store.pipeline,
+      reducer: newReducers,
+      effects: newEffects
+    }
+  };
 }
 
-function unloadModule(store: Store<any>, module: FeatureModule) {
-  // Remove the module from the store's modules
-  store.modules = store.modules.filter(m => m.slice !== module.slice);
+function unloadModule(store: Store<any>, module: FeatureModule): Store<any> {
+  // Create a new array with the module removed from the store's modules
+  const newModules = store.modules.filter(m => m.slice !== module.slice);
 
   // Setup the reducers
-  setupReducers(store);
+  const newReducers = setupReducers(store);
 
   // Unregister the module's effects
-  store.dispatch(actionCreators.unregisterEffects());
+  const newEffects = unregisterEffects(store, module);
+
+  // Return a new store with the updated properties
+  return {
+    ...store,
+    modules: newModules,
+    pipeline: {
+      ...store.pipeline,
+      reducer: newReducers,
+      effects: newEffects
+    }
+  };
 }
-
-
 
 function assertReducerShape(reducers: any): void {
   const reducerKeys = Object.keys(reducers);
@@ -364,7 +390,7 @@ function setupReducers(store: Store<any>) {
   }
 
   // Combine all reducers into a single reducing function
-  store.pipeline.reducer = combineReducers(reducers);
+  return combineReducers(reducers);
 }
 
 function combineReducers(reducers: Record<string, Reducer<any>>): Reducer<any> {
@@ -450,7 +476,7 @@ function applyMiddleware(...operators: MiddlewareOperator<any>[]) {
 
 // applyTransformers function that accepts operator functions
 function setupTransformers(store: Store<any>) {
-  const transformers = ((source: any) => {
+  return ((source: any) => {
     let result: any;
     store.mainModule.transformers.some(fn => (result = fn(source)(store.dispatch, store.getState)) instanceof Observable);
     if (typeof result === 'undefined' && !(source instanceof Observable)) {
@@ -458,48 +484,42 @@ function setupTransformers(store: Store<any>) {
     }
     return result ?? source;
   });
-
-  store.pipeline.transformers = transformers;
 }
 
 
 
 function setupProcessors(store: Store<any>) {
   // Create a pipeline function that takes dispatch and getState
-  const processors = (source: Observable<any>) => {
+  return (source: Observable<any>) => {
     return store.mainModule.processors.reduce((result, fn) => {
       return fn(result)(store.dispatch, store.getState);
     }, source);
   };
-
-  // Enhance the store with processors
-  store.pipeline.processors = processors;
 }
 
 function registerEffects(store: Store<any>) {
   // Iterate over each module and add its effects to the pipeline
+  let effects = store.mainModule.effects ? [...store.mainModule.effects] : [];
   for (const module of store.modules) {
-    store.pipeline.effects.push(...module.effects);
+    effects.push(...module.effects);
   }
+
+  return effects;
 }
 
-function unregisterEffects(store: Store<any>, module: FeatureModule) {
-  // Iterate over each effect in the module
-  for (const effect of module.effects) {
-    // Find the index of the effect in the pipeline
-    const index = store.pipeline.effects.indexOf(effect);
+function unregisterEffects(store: Store<any>, module: FeatureModule): SideEffect[] {
+  // Create a new array excluding the effects of the module to be unloaded
+  const remainingEffects = store.pipeline.effects.filter(effect => !module.effects.includes(effect));
 
-    // If the effect is found, remove it from the pipeline
-    if (index !== -1) {
-      store.pipeline.effects.splice(index, 1);
-    }
-  }
+  // Return the array of remaining effects
+  return remainingEffects;
 }
+
 
 
 
 export {
   actionTypes_default as __DO_NOT_USE__ActionTypes,
-  applyMiddleware, compose, createStore, isAction, isPlainObject, kindOf, loadModule, registerEffects, setupProcessors, setupReducers, setupTransformers, unloadModule, unregisterEffects
+  applyMiddleware, combineReducers, compose, createStore, isAction, isPlainObject, kindOf, loadModule, registerEffects, setupProcessors, setupReducers, setupTransformers, unloadModule, unregisterEffects
 };
 
