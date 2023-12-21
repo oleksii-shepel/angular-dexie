@@ -218,7 +218,7 @@ function createStore<K>(reducer: Reducer<any>, preloadedState?: K | undefined, e
 
   store.pipeline.transformers = setupTransformers(store) || ((action: any) => action);
   store.pipeline.processors = setupProcessors(store) || ((action: any) => action);
-  store.pipeline.reducer = setupReducers(store) || ((state: any, action: Action<any>) => state);
+  store.pipeline.reducer = setupReducer(store) || ((state: any, action: Action<any>) => state);
   store.pipeline.effects = registerEffects(store) || [];
 
   let actionStream = new ReplaySubject<Observable<Action<any>> | AsyncAction<any> | AsyncGenerator<Promise<any>, any, any> | Generator<Promise<any>, any, any>>();
@@ -316,13 +316,13 @@ function loadModule(store: Store<any>, module: FeatureModule): Store<any> {
   const newModules = [...store.modules, module];
 
   // Setup the reducers
-  const newReducers = setupReducers(store);
+  const newReducer = setupReducer(store);
 
   // Register the module's effects
   const newEffects = [...store.pipeline.effects, ...module.effects];
 
   // Return a new store with the updated properties
-  return {...store, modules: newModules, pipeline: {...store.pipeline, reducer: newReducers, effects: newEffects}}
+  return {...store, modules: newModules, pipeline: {...store.pipeline, reducer: newReducer, effects: newEffects}}
 
 }
 
@@ -331,13 +331,13 @@ function unloadModule(store: Store<any>, module: FeatureModule): Store<any> {
   const newModules = store.modules.filter(m => m.slice !== module.slice);
 
   // Setup the reducers
-  const newReducers = setupReducers(store);
+  const newReducer = setupReducer(store);
 
   // Unregister the module's effects
   const newEffects = unregisterEffects(store, module);
 
   // Return a new store with the updated properties
-  return {...store, modules: newModules, pipeline: {...store.pipeline, reducer: newReducers, effects: newEffects}}
+  return {...store, modules: newModules, pipeline: {...store.pipeline, reducer: newReducer, effects: newEffects}}
 }
 
 function assertReducerShape(reducers: any): void {
@@ -361,7 +361,7 @@ function assertReducerShape(reducers: any): void {
   }
 }
 
-function setupReducers(store: Store<any>) {
+function setupReducer(store: Store<any>) {
   const reducers: Record<string, Reducer<any>> = {};
 
   // Iterate over each module
@@ -505,6 +505,6 @@ function unregisterEffects(store: Store<any>, module: FeatureModule): SideEffect
 
 export {
   actionTypes_default as __DO_NOT_USE__ActionTypes,
-  applyMiddleware, combineReducers, compose, createStore, isAction, isPlainObject, kindOf, loadModule, registerEffects, setupProcessors, setupReducers, setupTransformers, unloadModule, unregisterEffects
+  applyMiddleware, combineReducers, compose, createStore, isAction, isPlainObject, kindOf, loadModule, registerEffects, setupProcessors, setupReducer as setupReducers, setupTransformers, unloadModule, unregisterEffects
 };
 
