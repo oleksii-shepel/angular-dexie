@@ -26,39 +26,43 @@ export const thunkMiddleware = (): MiddlewareOperator<any> => {
       }
     }
     // If the source is not a function or is a generator function, return it unmodified
-    return source;
+    return undefined;
   };
 }
 
 export const sagaMiddleware = <T>(): MiddlewareOperator<T> => {
   return (source: () => Generator<Promise<any>, void, any> | AsyncGenerator<Promise<any>, void, any>) => (dispatch: Function, getState: Function) => {
-    return new Observable(observer => {
-      const iterator = source(); // Start the saga
-      const sagaName = source.name.toUpperCase(); // Capitalize the saga name
-      observer.next({ type: `${sagaName}_STARTED` }); // Dispatch SAGA_START action with capitalized saga name
-      resolveIterator(iterator);
+    if (typeof source === 'function' && (source.constructor.name === 'GeneratorFunction' || source.constructor.name === 'AsyncGeneratorFunction')) {
+      return new Observable(observer => {
+        const iterator = source(); // Start the saga
+        const sagaName = source.name.toUpperCase(); // Capitalize the saga name
+        observer.next({ type: `${sagaName}_STARTED` }); // Dispatch SAGA_START action with capitalized saga name
+        resolveIterator(iterator);
 
-      async function resolveIterator(iterator: AsyncIterator<Promise<any>> | Iterator<Promise<any>>) {
-        const { value, done } = await Promise.resolve(iterator.next());
+        async function resolveIterator(iterator: AsyncIterator<Promise<any>> | Iterator<Promise<any>>) {
+          const { value, done } = await Promise.resolve(iterator.next());
 
-        if (!done) {
-          value.then(result => {
-            observer.next(result); // Dispatch the result as an action
-            iterator.next(result);
-            resolveIterator(iterator);
-          });
-        } else {
-          observer.next({ type: `${sagaName}_FINISHED` }); // Dispatch SAGA_FINISHED action with capitalized saga name
-          observer.complete(); // Complete the Observable when the saga is done
+          if (!done) {
+            value.then(result => {
+              observer.next(result); // Dispatch the result as an action
+              iterator.next(result);
+              resolveIterator(iterator);
+            });
+          } else {
+            observer.next({ type: `${sagaName}_FINISHED` }); // Dispatch SAGA_FINISHED action with capitalized saga name
+            observer.complete(); // Complete the Observable when the saga is done
+          }
         }
-      }
 
-      // Return teardown logic
-      return () => {
-        // Handle cleanup if necessary
-      };
-    });
-  };
+        // Return teardown logic
+        return () => {
+          // Handle cleanup if necessary
+        };
+      });
+    } else {
+      return undefined;
+    }
+  }
 };
 
 
