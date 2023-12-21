@@ -158,7 +158,7 @@ const actionCreators = {
 export function supervisor<K>(mainModule: MainModule) {
   return (createStore: StoreCreator<K>) => (reducer: Reducer<any>, preloadedState?: K | undefined, enhancer?: Function) => {
     // Create the store as usual
-    const store = createStore(reducer, preloadedState, enhancer);
+    let store = createStore(reducer, preloadedState, enhancer);
 
     // Enhance the dispatch function
     const originalDispatch = store.dispatch;
@@ -172,13 +172,13 @@ export function supervisor<K>(mainModule: MainModule) {
         // Handle specific actions
         switch (action.type) {
           case actions.INIT_STORE:
-            store.mainModule = action.payload;
+            store.mainModule = { ...store.mainModule, ...action.payload };
             break;
           case actions.LOAD_MODULE:
-            loadModule(store, action.payload);
+            store = loadModule(store, action.payload);
             break;
           case actions.UNLOAD_MODULE:
-            unloadModule(store, action.payload);
+            store = unloadModule(store, action.payload);
             break;
           case actions.ENABLE_TRANSFORMERS:
             store.pipeline.transformers = setupTransformers(store);
@@ -218,7 +218,7 @@ function createStore<K>(reducer: Reducer<any>, preloadedState?: K | undefined, e
 
   store.pipeline.transformers = setupTransformers(store) || ((action: any) => action);
   store.pipeline.processors = setupProcessors(store) || ((action: any) => action);
-  store.pipeline.reducer = setupReducers(store);
+  store.pipeline.reducer = setupReducers(store) || ((state: any, action: Action<any>) => state);
   store.pipeline.effects = registerEffects(store) || [];
 
   let actionStream = new ReplaySubject<Observable<Action<any>> | AsyncAction<any> | AsyncGenerator<Promise<any>, any, any> | Generator<Promise<any>, any, any>>();
@@ -322,15 +322,8 @@ function loadModule(store: Store<any>, module: FeatureModule): Store<any> {
   const newEffects = [...store.pipeline.effects, ...module.effects];
 
   // Return a new store with the updated properties
-  return {
-    ...store,
-    modules: newModules,
-    pipeline: {
-      ...store.pipeline,
-      reducer: newReducers,
-      effects: newEffects
-    }
-  };
+  return {...store, modules: newModules, pipeline: {...store.pipeline, reducer: newReducers, effects: newEffects}}
+
 }
 
 function unloadModule(store: Store<any>, module: FeatureModule): Store<any> {
@@ -344,15 +337,7 @@ function unloadModule(store: Store<any>, module: FeatureModule): Store<any> {
   const newEffects = unregisterEffects(store, module);
 
   // Return a new store with the updated properties
-  return {
-    ...store,
-    modules: newModules,
-    pipeline: {
-      ...store.pipeline,
-      reducer: newReducers,
-      effects: newEffects
-    }
-  };
+  return {...store, modules: newModules, pipeline: {...store.pipeline, reducer: newReducers, effects: newEffects}}
 }
 
 function assertReducerShape(reducers: any): void {
