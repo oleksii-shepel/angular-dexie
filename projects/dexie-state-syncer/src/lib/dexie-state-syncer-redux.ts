@@ -114,10 +114,11 @@ export interface Store<K> {
   pipeline: {
     transformers: (source: any) => Observable<Action<any>>;
     processors: (source: Observable<Action<any>>) => Observable<Action<any>>;
-    reducer: Record<string, Reducer<any>>;
+    reducer: Reducer<any>;
     effects: SideEffect[];
   };
   mainModule: MainModule;
+  modules: FeatureModule[];
 }
 
 // const actionHandlers = {
@@ -150,7 +151,7 @@ const actionCreators = {
   enableTransformers: () => ({ type: actions.ENABLE_TRANSFORMERS }),
   setupProcessors: () => ({ type: actions.SETUP_PROCESSORS }),
   registerEffects: () => ({ type: actions.REGISTER_EFFECTS }),
-  unregisterEffects: () => ({ type: actions.UNREGISTER_EFFECTS }),
+  unregisterEffects: () => ({ type: actions.UNREGISTER_EFFECTS, payload: module}),
 };
 
 // Define the reducer
@@ -180,7 +181,7 @@ export function supervisor<K>(mainModule: MainModule) {
             unloadModule(store, action.payload);
             break;
           case actions.ENABLE_TRANSFORMERS:
-            enableTransformers(store);
+            setupTransformers(store);
             break;
           case actions.SETUP_PROCESSORS:
             setupProcessors(store);
@@ -189,7 +190,7 @@ export function supervisor<K>(mainModule: MainModule) {
             registerEffects(store);
             break;
           case actions.UNREGISTER_EFFECTS:
-            unregisterEffects(store);
+            unregisterEffects(store, action.payload);
             break;
           default:
             break;
@@ -213,11 +214,11 @@ export type StoreCreator<K> = (reducer: Reducer<any>, preloadedState?: K | undef
 
 function createStore<K>(reducer: Reducer<any>, preloadedState?: K | undefined, enhancer?: Function): Store<K> {
 
-  let store = { dispatch, getState, replaceReducer, pipe, subscribe, pipeline: {}, mainModule: {} } as any;
+  let store = { dispatch, getState, replaceReducer, pipe, subscribe, pipeline: {}, mainModule: {}, modules: [] } as any;
 
   store.pipeline.transformers = store.mainModule.transformers || ((action: any) => action);
   store.pipeline.processors = store.mainModule.processors || ((action: any) => action);
-  store.pipeline.reducer = combineReducers(store.mainModule.reducers || {});
+  store.pipeline.reducer = setupReducers(store);
   store.pipeline.effects = store.mainModule.effects || [];
 
   let actionStream = new ReplaySubject<Observable<Action<any>> | AsyncAction<any> | AsyncGenerator<Promise<any>, any, any> | Generator<Promise<any>, any, any>>();
@@ -305,23 +306,27 @@ function createStore<K>(reducer: Reducer<any>, preloadedState?: K | undefined, e
 }
 
 function loadModule(store: Store<any>, module: FeatureModule) {
-  // Combine the module's reducer with the current reducers
-  const newReducers = { ...store.mainModule.reducers, [module.slice]: module.reducer };
-  const newRootReducer = combineReducers(newReducers);
+  // Add the module to the store's modules
+  store.modules.push(module);
 
-  // Replace the store's reducer
-  store.replaceReducer(newRootReducer);
+  // Setup the reducers
+  setupReducers(store);
+
+  // Register the module's effects
   store.dispatch(actionCreators.registerEffects());
 }
 
 function unloadModule(store: Store<any>, module: FeatureModule) {
-  // Remove the module's reducer from the current reducers
-  const {[module.slice]: _, ...remainingReducers} = store.mainModule.reducers;
+  // Remove the module from the store's modules
+  store.modules = store.modules.filter(m => m.slice !== module.slice);
 
-  // Replace the store's reducer
-  store.replaceReducer(combineReducers(remainingReducers));
+  // Setup the reducers
+  setupReducers(store);
+
+  // Unregister the module's effects
   store.dispatch(actionCreators.unregisterEffects());
 }
+
 
 
 function assertReducerShape(reducers: any): void {
@@ -343,6 +348,23 @@ function assertReducerShape(reducers: any): void {
       throw new Error(`The slice reducer for key "${key}" returned undefined when probed with a random type. Don't try to handle '${actionTypes_default.INIT}' or other actions in "redux/*" namespace. They are considered private. Instead, you must return the current state for any unknown actions, unless it is undefined, in which case you must return the initial state, regardless of the action type. The initial state may not be undefined, but can be null.`);
     }
   }
+}
+
+function setupReducers(store: Store<any>) {
+  const reducers: Record<string, Reducer<any>> = {};
+
+  // Iterate over each module
+  for (const moduleName in store.modules) {
+    const module = store.modules[moduleName];
+
+    // Combine the module's reducers
+    if (module.reducer) {
+      reducers[moduleName] = module.reducer;
+    }
+  }
+
+  // Combine all reducers into a single reducing function
+  store.pipeline.reducer = combineReducers(reducers);
 }
 
 function combineReducers(reducers: Record<string, Reducer<any>>): Reducer<any> {
@@ -427,7 +449,7 @@ function applyMiddleware(...operators: MiddlewareOperator<any>[]) {
 }
 
 // applyTransformers function that accepts operator functions
-function enableTransformers(store: Store<any>) {
+function setupTransformers(store: Store<any>) {
   const transformers = ((source: any) => {
     let result: any;
     store.mainModule.transformers.some(fn => (result = fn(source)(store.dispatch, store.getState)) instanceof Observable);
@@ -455,17 +477,29 @@ function setupProcessors(store: Store<any>) {
 }
 
 function registerEffects(store: Store<any>) {
-  store.pipeline.effects = [...store.mainModule.effects];
+  // Iterate over each module and add its effects to the pipeline
+  for (const module of store.modules) {
+    store.pipeline.effects.push(...module.effects);
+  }
 }
 
-function unregisterEffects(store: Store<any>) {
-  // Remove the effects from the store's effects array
-  store.pipeline.effects = store.pipeline.effects.filter((effect: any) => !store.mainModule.effects.includes(effect));
+function unregisterEffects(store: Store<any>, module: FeatureModule) {
+  // Iterate over each effect in the module
+  for (const effect of module.effects) {
+    // Find the index of the effect in the pipeline
+    const index = store.pipeline.effects.indexOf(effect);
+
+    // If the effect is found, remove it from the pipeline
+    if (index !== -1) {
+      store.pipeline.effects.splice(index, 1);
+    }
+  }
 }
+
 
 
 export {
   actionTypes_default as __DO_NOT_USE__ActionTypes,
-  applyMiddleware, combineReducers, compose, createStore, enableTransformers, isAction, isPlainObject, kindOf, loadModule, registerEffects, setupProcessors, unloadModule, unregisterEffects
+  applyMiddleware, compose, createStore, isAction, isPlainObject, kindOf, loadModule, registerEffects, setupProcessors, setupReducers, setupTransformers, unloadModule, unregisterEffects
 };
 
