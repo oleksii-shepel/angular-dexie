@@ -31,26 +31,44 @@ export const thunkMiddleware = (): MiddlewareOperator<any> => {
 }
 
 export const sagaMiddleware = <T>(): MiddlewareOperator<T> => {
+  const runningSagas = new Map();
+
   return (source: () => Generator<Promise<any>, void, any> | AsyncGenerator<Promise<any>, void, any>) => (dispatch: Function, getState: Function) => {
     if (typeof source === 'function' && (source.constructor.name === 'GeneratorFunction' || source.constructor.name === 'AsyncGeneratorFunction')) {
-      return new Observable(observer => {
-        const iterator = source(); // Start the saga
-        const sagaName = source.name.toUpperCase(); // Capitalize the saga name
+      const sagaName = source.name.toUpperCase(); // Capitalize the saga name
+
+      // If the saga is already running, return
+      if (runningSagas.has(sagaName)) {
+        // If the saga is already running, return an Observable that completes immediately
+        return new Observable(observer => {
+          observer.complete();
+        });
+      }
+
+      const iterator = source(); // Start the saga
+      runningSagas.set(sagaName, iterator); // Add the saga to the map of running sagas
+
+      // Observable for saga
+      const sagaObservable = new Observable(observer => {
         observer.next({ type: `${sagaName}_STARTED` }); // Dispatch SAGA_START action with capitalized saga name
         resolveIterator(iterator);
 
         async function resolveIterator(iterator: AsyncIterator<Promise<any>> | Iterator<Promise<any>>) {
-          const { value, done } = await Promise.resolve(iterator.next());
+          try {
+            const { value, done } = await Promise.resolve(iterator.next());
 
-          if (!done) {
-            value.then(result => {
-              observer.next(result); // Dispatch the result as an action
-              iterator.next(result);
-              resolveIterator(iterator);
-            });
-          } else {
-            observer.next({ type: `${sagaName}_FINISHED` }); // Dispatch SAGA_FINISHED action with capitalized saga name
-            observer.complete(); // Complete the Observable when the saga is done
+            if (!done) {
+              value.then(result => {
+                iterator.next(result);
+                resolveIterator(iterator);
+              });
+            } else {
+              runningSagas.delete(sagaName); // Remove the saga from the map of running sagas
+              observer.next({ type: `${sagaName}_FINISHED` }); // Dispatch SAGA_FINISHED action with capitalized saga name
+              observer.complete(); // Complete the Observable when the saga is done
+            }
+          } catch (error) {
+            observer.error(error);
           }
         }
 
@@ -59,11 +77,16 @@ export const sagaMiddleware = <T>(): MiddlewareOperator<T> => {
           // Handle cleanup if necessary
         };
       });
+
+      return sagaObservable;
     } else {
       return undefined;
     }
   }
 };
+
+
+
 
 
 // Logger middleware as an RxJS operator
