@@ -1,7 +1,7 @@
 import { Observable, Subject, concat, defer, first, switchMap } from "rxjs";
-import { Action } from "./dexie-state-syncer-actions";
+import { Action, AsyncAction } from "./dexie-state-syncer-actions";
 import { Lock } from "./dexie-state-syncer-lock";
-import { Middleware, MiddlewareOperator } from "./dexie-state-syncer-redux";
+import { Middleware, MiddlewareOperator, Store } from "./dexie-state-syncer-redux";
 
 export function sequential(middleware: Middleware): Middleware {
   const lock = new Lock();
@@ -17,115 +17,78 @@ export function sequential(middleware: Middleware): Middleware {
   };
 }
 
-// Custom operator that waits for a condition observable to emit true.
-export function waitUntil<T>(
-  conditionFn: () => Observable<boolean>
-): MiddlewareOperator<T> {
-  return (source: Observable<T>) => (dispatch: Function, getState: Function) =>
+export function waitUntil(conditionFn: () => Observable<boolean>): MiddlewareOperator {
+  return (store: Store<any>) => (next: Function) => (action: Action<any> | AsyncAction<any>) =>
     defer(conditionFn).pipe(
-      first((value) => value === true), // Wait until the condition observable emits true
-      switchMap(() => source) // Then switch to the source observable
+      first((value) => value === true),
+      switchMap(() => next(action))
     );
 }
 
-export const thunkMiddleware = (): MiddlewareOperator<any> => {
-  return (source: any) => (dispatch: Function, getState: Function) => {
-    if (typeof source === 'function') {
-      if (
-        source.constructor.name !== 'GeneratorFunction' &&
-        source.constructor.name !== 'AsyncGeneratorFunction'
-      ) {
-        // Handle thunk
-        return source(dispatch, getState);
-      }
+export const thunkMiddleware = (): MiddlewareOperator => {
+  return (store: Store<any>) => (next: Function) => (action: Action<any> | AsyncAction<any>) => {
+    if (typeof action === 'function') {
+        return next(action(store.dispatch, store.getState));
     }
-    // If the source is not a function or is a generator function, return it unmodified
-    return undefined;
+    return next(action);
   };
 };
 
-export const sagaMiddleware = <T>(): MiddlewareOperator<T> => {
+export const sagaMiddleware = (): MiddlewareOperator => {
   const runningSagas = new Map();
 
-  return (
-      source: () =>
-        | Generator<Promise<any>, void, any>
-        | AsyncGenerator<Promise<any>, void, any>
-    ) =>
-    (dispatch: Function, getState: Function) => {
+  return (store: Store<any>) => (next: Function) => (action: Action<any> | AsyncAction<any>) => {
+    for (const effect of store.pipeline.effects) {
       if (
-        typeof source === 'function' &&
-        (source.constructor.name === 'GeneratorFunction' ||
-          source.constructor.name === 'AsyncGeneratorFunction')
+        typeof effect === 'function' &&
+        (effect.constructor.name === 'GeneratorFunction' ||
+          effect.constructor.name === 'AsyncGeneratorFunction')
       ) {
-        const sagaName = source.name.toUpperCase(); // Capitalize the saga name
+        const sagaName = effect.name.toUpperCase();
 
-        // If the saga is already running, return
         if (runningSagas.has(sagaName)) {
-          // If the saga is already running, return an Observable that completes immediately
-          return new Observable((observer) => {
-            observer.complete();
-          });
+          continue;
         }
 
-        const iterator = source(); // Start the saga
-        runningSagas.set(sagaName, iterator); // Add the saga to the map of running sagas
+        const iterator = effect();
+        runningSagas.set(sagaName, iterator);
 
-        // Observable for saga
-        const sagaObservable = new Observable((observer) => {
-          observer.next({ type: `${sagaName}_STARTED` }); // Dispatch SAGA_START action with capitalized saga name
-          resolveIterator(iterator);
-
-          async function resolveIterator(
-            iterator: AsyncIterator<Promise<any>> | Iterator<Promise<any>>
-          ) {
-            try {
-              const { value, done } = await Promise.resolve(iterator.next());
-
-              if (!done) {
-                value.then((result) => {
-                  iterator.next(result);
-                  resolveIterator(iterator);
-                });
-              } else {
-                runningSagas.delete(sagaName); // Remove the saga from the map of running sagas
-                observer.next({ type: `${sagaName}_FINISHED` }); // Dispatch SAGA_FINISHED action with capitalized saga name
-                observer.complete(); // Complete the Observable when the saga is done
-              }
-            } catch (error) {
-              observer.error(error);
-            }
-          }
-
-          // Return teardown logic
-          return () => {
-            // Handle cleanup if necessary
-          };
-        });
-
-        return sagaObservable;
-      } else {
-        return undefined;
+        store.dispatch({ type: `${sagaName}_STARTED` });
+        resolveIterator(iterator, sagaName);
       }
-    };
+    }
+
+    function resolveIterator(
+      iterator: AsyncIterator<Promise<any>> | Iterator<Promise<any>>,
+      sagaName: string
+    ) {
+      Promise.resolve(iterator.next()).then(({ value, done }) => {
+        if (!done) {
+          value.then((result) => {
+            iterator.next(result);
+            resolveIterator(iterator, sagaName);
+          });
+        } else {
+          store.dispatch({ type: `${sagaName}_FINISHED` });
+        }
+      });
+    }
+
+    return next(action);
+  };
 };
 
-// Logger middleware as an RxJS operator
-export const loggerMiddleware =
-  <T>(): MiddlewareOperator<T> =>
-  (source: Observable<T>) =>
-  (dispatch: Function, getState: Function) =>
-    new Observable<T>((observer) => {
-      return source.subscribe({
-        next: (action) => {
-          console.log('[Middleware] Received action:', action);
-          observer.next(action);
-          console.log('[Middleware] Processed action:', action);
-        },
-        error: (err) => observer.error(err),
-        complete: () => observer.complete(),
-      });
-    });
+
+
+
+export const loggerMiddleware = (): MiddlewareOperator => {
+  return (store: Store<any>) => (next: Function) => (action: Action<any> | AsyncAction<any>) => {
+    console.log('[Middleware] Received action:', action);
+    const result = next(action);
+    console.log('[Middleware] Processed action:', action);
+    return result;
+  };
+};
 
 function runGenerator<T>(generator: Generator<Promise<T>, T, T>): Promise<T> {
   return new Promise((resolve, reject) => {

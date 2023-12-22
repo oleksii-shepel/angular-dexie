@@ -43,6 +43,9 @@ const routes: Routes = [
   },
 ];
 
+function* rootSaga(): Generator<Promise<any>, any, any> {
+  console.log('Hello from saga');
+};
 @NgModule({
   declarations: [AppComponent],
   imports: [
@@ -50,10 +53,10 @@ const routes: Routes = [
     RouterModule.forRoot(routes),
     StoreModule.forRoot(
       {
-        transformers: [thunkMiddleware(), sagaMiddleware()],
-        processors: [loggerMiddleware()],
+        transformers: [thunkMiddleware()],
+        processors: [loggerMiddleware(), sagaMiddleware()],
         reducers: {},
-        effects: [],
+        effects: [rootSaga],
       },
       (module: MainModule) =>
         createStore(
