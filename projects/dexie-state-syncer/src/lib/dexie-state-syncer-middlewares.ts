@@ -34,7 +34,7 @@ export const thunkMiddleware: MiddlewareOperator = (store: Store<any>) => {
   };
 };
 
-export const sagaMiddleware: MiddlewareOperator & {runningSagas: Map<string, any>} = (store: Store<any>) => {
+export const sagaMiddleware: MiddlewareOperator & { runningSagas: Map<string, any> } = (store: Store<any>) => {
   let runningSagas = sagaMiddleware.runningSagas;
 
   return (next: Function) => (action: Action<any> | AsyncAction<any>) => {
@@ -89,7 +89,7 @@ export const loggerMiddleware: MiddlewareOperator = (store: Store<any>) => {
   };
 };
 
-function runGenerator<T>(generator: Generator<Promise<T>, T, T>): Promise<T> {
+export function runGenerator<T>(generator: Generator<Promise<T>, T, T>): Promise<T> {
   return new Promise((resolve, reject) => {
     function step({ value, done }: IteratorResult<Promise<T>, T>) {
       const promise: Promise<T> = Promise.resolve(value);
