@@ -34,9 +34,8 @@ export const thunkMiddleware: MiddlewareOperator = (store: Store<any>) => {
   };
 };
 
-const runningSagas = new Map();
-
-export const sagaMiddleware: MiddlewareOperator = (store: Store<any>) => {
+export const sagaMiddleware: MiddlewareOperator & {runningSagas: Map<string, any>} = (store: Store<any>) => {
+  let runningSagas = sagaMiddleware.runningSagas;
 
   return (next: Function) => (action: Action<any> | AsyncAction<any>) => {
     for (const effect of store.pipeline.effects) {
@@ -79,7 +78,7 @@ export const sagaMiddleware: MiddlewareOperator = (store: Store<any>) => {
   };
 };
 
-
+sagaMiddleware.runningSagas = new Map();
 
 export const loggerMiddleware: MiddlewareOperator = (store: Store<any>) => {
   return (next: Function) => (action: Action<any> | AsyncAction<any>) => {
