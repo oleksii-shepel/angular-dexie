@@ -1,4 +1,4 @@
-import { Observable, Subject, concat, defer, first, switchMap } from "rxjs";
+import { EMPTY, Observable, Subject, concat, defer, first, switchMap } from "rxjs";
 import { Action, AsyncAction } from "./dexie-state-syncer-actions";
 import { Lock } from "./dexie-state-syncer-lock";
 import { Middleware, MiddlewareOperator, Store } from "./dexie-state-syncer-redux";
@@ -34,11 +34,15 @@ export const thunkMiddleware: MiddlewareOperator = (store: Store<any>) => {
   };
 };
 
+
 export const sagaMiddleware: MiddlewareOperator & { runningSagas: Map<string, any> } = (store: Store<any>) => {
   let runningSagas = sagaMiddleware.runningSagas;
 
   return (next: Function) => (action: Action<any> | AsyncAction<any>) => {
-    for (const effect of store.pipeline.effects) {
+    // Call next(action) before running sagas
+    const result = next(action);
+
+    const sagas$ = store.pipeline.effects.map(effect => {
       if (
         typeof effect === 'function' &&
         (effect.constructor.name === 'GeneratorFunction' ||
@@ -47,36 +51,45 @@ export const sagaMiddleware: MiddlewareOperator & { runningSagas: Map<string, an
         const sagaName = effect.name.toUpperCase();
 
         if (runningSagas.has(sagaName)) {
-          continue;
+          return EMPTY; // Return a completed Observable
         }
 
-        const iterator = effect();
-        runningSagas.set(sagaName, iterator);
+        function resolveIterator(effect: Function, sagaName: string) {
+          const iterator = effect();
 
-        store.dispatch({ type: `${sagaName}_STARTED` });
-        resolveIterator(iterator, sagaName);
-      }
-    }
+          return new Observable(observer => {
+            async function processIterator() {
+              // Dispatch STARTED action
+              observer.next({ type: `${sagaName}_STARTED` });
 
-    function resolveIterator(
-      iterator: AsyncIterator<Promise<any>> | Iterator<Promise<any>>,
-      sagaName: string
-    ) {
-      Promise.resolve(iterator.next()).then(({ value, done }) => {
-        if (!done) {
-          value.then((result) => {
-            iterator.next(result);
-            resolveIterator(iterator, sagaName);
+              let next = iterator.next();
+              while (!next.done) {
+                const value = await next.value;
+                observer.next(value);
+                next = iterator.next();
+              }
+
+              // Dispatch FINISHED action
+              observer.next({ type: `${sagaName}_FINISHED` });
+              observer.complete();
+            }
+            processIterator();
           });
-        } else {
-          store.dispatch({ type: `${sagaName}_FINISHED` });
         }
-      });
-    }
 
-    return next(action);
+        const saga$ = resolveIterator(effect, sagaName);
+        runningSagas.set(sagaName, saga$);
+        return saga$;
+      } else {
+        return EMPTY; // Return a completed Observable
+      }
+    });
+
+    // Merge the result of next(action) and all the saga Observables
+    return concat(result, ...sagas$);
   };
 };
+
 
 sagaMiddleware.runningSagas = new Map();
 

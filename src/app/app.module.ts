@@ -53,8 +53,8 @@ function* rootSaga(): Generator<Promise<any>, any, any> {
     RouterModule.forRoot(routes),
     StoreModule.forRoot(
       {
-        transformers: [thunkMiddleware],
-        processors: [loggerMiddleware, sagaMiddleware],
+        transformers: [thunkMiddleware, sagaMiddleware],
+        processors: [loggerMiddleware],
         reducers: {},
         effects: [rootSaga],
       },

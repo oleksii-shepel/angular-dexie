@@ -1,4 +1,4 @@
-import { Observable, Observer, ReplaySubject, Subscription, UnaryFunction, concatMap, from, isObservable, map, of, scan, tap } from "rxjs";
+import { Observable, Observer, ReplaySubject, Subscription, UnaryFunction, concatMap, from, isObservable, of, scan, tap } from "rxjs";
 import { Action, AsyncAction } from "./dexie-state-syncer-actions";
 import { AsyncObserver, CustomAsyncSubject, toObservable } from "./dexie-state-syncer-behaviour-subject";
 import { AnyFn } from "./dexie-state-syncer-selectors";
@@ -119,19 +119,10 @@ export interface Store<K> {
   };
   mainModule: MainModule;
   modules: FeatureModule[];
+  actionStream: ReplaySubject<Observable<Action<any>> | AsyncAction<any>>;
+  currentState: CustomAsyncSubject<K>;
+  isDispatching: boolean;
 }
-
-// const actionHandlers = {
-//   'Function': handleAsyncAction,
-//   'GeneratorFunction': handleGeneratorAction,
-//   'AsyncGeneratorFunction': handleAsyncGeneratorAction,
-//   'Object': handleSyncAction,
-// };
-
-// function getActionHandler(action: any) {
-//   const actionType = action.constructor.name;
-//   return actionHandlers[actionType] || handleUnknownAction;
-// }
 
 const actions = {
   INIT_STORE: 'INIT_STORE',
@@ -156,9 +147,14 @@ const actionCreators = {
 
 // Define the reducer
 export function supervisor<K>(mainModule: MainModule) {
-  return (createStore: StoreCreator<K>) => (reducer: Reducer<any>, preloadedState?: K | undefined, enhancer?: Function) => {
+  return (storeCreator: StoreCreator<K>) => (reducer: Reducer<any>, preloadedState?: K | undefined, enhancer?: Function) => {
     // Create the store as usual
-    let store = createStore(reducer, preloadedState, enhancer);
+    let store = storeCreator.store as any;
+
+    // If store is not already initialized, initialize it
+    if (!store) {
+      store = storeCreator.store = storeCreator(reducer, preloadedState, enhancer);
+    }
 
     // Enhance the dispatch function
     const originalDispatch = store.dispatch;
@@ -210,20 +206,14 @@ export function supervisor<K>(mainModule: MainModule) {
   };
 }
 
-export type StoreCreator<K> = (reducer: Reducer<any>, preloadedState?: K | undefined, enhancer?: Function) => Store<any>;
+interface StoreCreator<K> extends Function {
+  (reducer: Reducer<any>, preloadedState?: K, enhancer?: Function): Store<K>;
+  store?: Store<K>;
+}
 
-function createStore<K>(reducer: Reducer<any>, preloadedState?: K | undefined, enhancer?: Function): Store<K> {
+const createStore: any = function <K>(reducer: Reducer<any>, preloadedState?: K | undefined, enhancer?: Function): Store<K> {
 
-  let store = { dispatch, getState, replaceReducer, pipe, subscribe, pipeline: {}, mainModule: { transformers: [], processors: [], reducer: (state: any, action: Action<any>) => state, effects: [] }, modules: [] } as any;
-
-  store.pipeline.transformers = setupTransformers(store) || ((action: any) => action);
-  store.pipeline.processors = setupProcessors(store) || ((action: any) => action);
-  store.pipeline.reducer = setupReducer(store) || ((state: any, action: Action<any>) => state);
-  store.pipeline.effects = registerEffects(store) || [];
-
-  let actionStream = new ReplaySubject<Observable<Action<any>> | AsyncAction<any>>();
-  let currentState = new CustomAsyncSubject<K>(preloadedState as K);
-  let isDispatching = false;
+  let store = createStore.store;
 
   if (typeof reducer !== "function") {
     throw new Error(`Expected the root reducer to be a function. Instead, received: '${kindOf(reducer)}'`);
@@ -238,36 +228,50 @@ function createStore<K>(reducer: Reducer<any>, preloadedState?: K | undefined, e
     preloadedState = undefined;
   }
 
+  // If store is not already initialized, initialize it
+  if (!store) {
+    store = createStore.store = { dispatch, getState, replaceReducer, pipe, subscribe, pipeline: {}, mainModule: { transformers: [], processors: [], reducer: (state: any, action: Action<any>) => state, effects: [] }, modules: [] } as any;
+
+    store.pipeline.transformers = ((action: any) => action);
+    store.pipeline.processors = ((action: any) => action);
+    store.pipeline.reducer = ((state: any, action: Action<any>) => state);
+    store.pipeline.effects = [];
+
+    store.actionStream = new ReplaySubject<Observable<Action<any>> | AsyncAction<any>>();
+    store.currentState = new CustomAsyncSubject<K>(preloadedState as K) as any;
+    store.isDispatching = false;
+  }
+
+  dispatch({
+    type: actionTypes_default.INIT
+  });
+
   if (typeof enhancer !== "undefined") {
     if (typeof enhancer !== "function") {
       throw new Error(`Expected the enhancer to be a function. Instead, received: '${kindOf(enhancer)}'`);
     }
-    store = enhancer(createStore)(reducer, preloadedState);
-  } else {
-    dispatch({
-      type: actionTypes_default.INIT
-    });
+    store = {...store, ...enhancer(createStore)(reducer, preloadedState)};
   }
 
-  const subscription = actionStream.pipe(
-    concatMap(action => store.pipeline.transformers(action)),
-    map(action => store.pipeline.processors(action)),
-    tap(() => isDispatching = true),
-    scan((state, action: any) => store.pipeline.reducer(state, action), currentState.value),
-    concatMap((state: any) => from(currentState.next(state))),
-    tap(() => isDispatching = false)
+  const subscription = store.actionStream.pipe(
+    concatMap(action => from(store.pipeline.transformers(action))),
+    concatMap(action => store.pipeline.processors(action)),
+    tap(() => store.isDispatching = true),
+    scan((state, action: any) => store.pipeline.reducer(state, action), store.currentState.value),
+    concatMap((state: any) => from(store.currentState.next(state))),
+    tap(() => store.isDispatching = false)
   ).subscribe();
 
 
   function getState(): K {
-    return currentState.value;
+    return store.currentState.value;
   }
 
   async function subscribe(next?: AnyFn | Observer<any>, error?: AnyFn, complete?: AnyFn): Promise<Subscription> {
     if (typeof next === 'function') {
-      return await currentState.subscribe({next, error, complete});
+      return await store.currentState.subscribe({next, error, complete});
     } else {
-      return await currentState.subscribe(next as Partial<AsyncObserver<any>>);
+      return await store.currentState.subscribe(next as Partial<AsyncObserver<any>>);
     }
   }
 
@@ -275,9 +279,9 @@ function createStore<K>(reducer: Reducer<any>, preloadedState?: K | undefined, e
 
     // If action is of type Action<any>, return Observable of action
     if (typeof action === 'object' && (action as any)?.type) {
-      actionStream.next(of(action));
+      store.actionStream.next(of(action));
     } else if (typeof action === 'function') {
-      actionStream.next(action);
+      store.actionStream.next(action);
     } else {
       throw new Error(`Expected the action to be an object with a 'type' property or a function. Instead, received: '${kindOf(action)}'`);
     }
@@ -294,7 +298,7 @@ function createStore<K>(reducer: Reducer<any>, preloadedState?: K | undefined, e
   }
 
   function pipe(...operators: Array<UnaryFunction<Observable<K>, Observable<any>>>): Observable<any> {
-    return operators.reduce((source, operator) => operator(source), toObservable<K>(currentState));
+    return operators.reduce((source, operator) => operator(source), toObservable<K>(store.currentState));
   }
 
   return {
@@ -474,10 +478,13 @@ function setupTransformers(store: Store<any>) {
 }
 
 function setupProcessors(store: Store<any>) {
-  return (action: Action<any> | AsyncAction<any>) => {
+  return (action: Action<any>) => {
     const chain = store.mainModule.processors.reduceRight((next, processor) => {
-      return (action: Action<any> | AsyncAction<any>) => processor(store)(next)(action);
-    }, (action: Action<any> | AsyncAction<any>) => action);
+      return (action: Action<any>) => {
+        const result = processor(store)(next)(action);
+        return isObservable(result) ? result : of(result);
+      };
+    }, (action: Action<any>) => of(action)); // Wrap the action in an Observable
     let result = chain(action);
     return result;
   };
