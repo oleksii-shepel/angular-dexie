@@ -34,8 +34,9 @@ export const thunkMiddleware: MiddlewareOperator = (store: Store<any>) => {
   };
 };
 
+const runningSagas = new Map();
+
 export const sagaMiddleware: MiddlewareOperator = (store: Store<any>) => {
-  const runningSagas = new Map();
 
   return (next: Function) => (action: Action<any> | AsyncAction<any>) => {
     for (const effect of store.pipeline.effects) {
@@ -70,7 +71,6 @@ export const sagaMiddleware: MiddlewareOperator = (store: Store<any>) => {
           });
         } else {
           store.dispatch({ type: `${sagaName}_FINISHED` });
-          runningSagas.delete(sagaName);
         }
       });
     }
@@ -78,6 +78,8 @@ export const sagaMiddleware: MiddlewareOperator = (store: Store<any>) => {
     return next(action);
   };
 };
+
+
 
 export const loggerMiddleware: MiddlewareOperator = (store: Store<any>) => {
   return (next: Function) => (action: Action<any> | AsyncAction<any>) => {
