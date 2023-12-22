@@ -112,8 +112,8 @@ export interface Store<K> {
   subscribe: (next?: AnyFn | Observer<any>, error?: AnyFn, complete?: AnyFn) => Promise<Subscription>;
   subscription: Subscription;
   pipeline: {
-    transformers: (next: Function) => (action: Action<any> | AsyncAction<any>) => any;
-    processors: (next: Function) => (action: Action<any> | AsyncAction<any>) => any;
+    transformers: (action: Action<any> | AsyncAction<any>) => any;
+    processors: (action: Action<any> | AsyncAction<any>) => any;
     reducer: Reducer<any>;
     effects: SideEffect[];
   };
@@ -250,8 +250,8 @@ function createStore<K>(reducer: Reducer<any>, preloadedState?: K | undefined, e
   }
 
   const subscription = actionStream.pipe(
-    concatMap(action => store.pipeline.transformers()(action)),
-    map(action => store.pipeline.processors()(action)),
+    concatMap(action => store.pipeline.transformers(action)),
+    map(action => store.pipeline.processors(action)),
     tap(() => isDispatching = true),
     scan((state, action: any) => store.pipeline.reducer(state, action), currentState.value),
     concatMap((state: any) => from(currentState.next(state))),
@@ -462,29 +462,28 @@ export type MiddlewareOperator = (store: Store<any>) => (next: Function) => (act
 //   };
 // }
 
-// applyTransformers function that accepts operator functions
 function setupTransformers(store: Store<any>) {
-  return (next = ((action: any) => action) as Function) => (action: Action<any> | AsyncAction<any>) => {
-    let result = action;
-    for (const transformer of store.mainModule.transformers) {
-      result = transformer(store)(next)(result);
-    }
+  return (action: Action<any> | AsyncAction<any>) => {
+    const chain = store.mainModule.transformers.reduceRight((next, transformer) => {
+      return (action: Action<any> | AsyncAction<any>) => transformer(store)(next)(action);
+    }, (action: Action<any> | AsyncAction<any>) => action);
+    let result = chain(action);
     // Ensure the result is an Observable
     return isObservable(result) ? result : of(result);
   };
 }
 
-
-
 function setupProcessors(store: Store<any>) {
-  return (next = ((action: any) => action) as Function) => (action: Action<any> | AsyncAction<any>) => {
-    let result = action;
-    for (const processor of store.mainModule.processors) {
-      result = processor(store)(next)(result);
-    }
+  return (action: Action<any> | AsyncAction<any>) => {
+    const chain = store.mainModule.processors.reduceRight((next, processor) => {
+      return (action: Action<any> | AsyncAction<any>) => processor(store)(next)(action);
+    }, (action: Action<any> | AsyncAction<any>) => action);
+    let result = chain(action);
     return result;
   };
 }
+
+
 
 
 function registerEffects(store: Store<any>) {
