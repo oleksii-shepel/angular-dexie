@@ -25,8 +25,8 @@ export function waitUntil(conditionFn: () => Observable<boolean>): MiddlewareOpe
     );
 }
 
-export const thunkMiddleware = (): MiddlewareOperator => {
-  return (store: Store<any>) => (next: Function) => (action: Action<any> | AsyncAction<any>) => {
+export const thunkMiddleware: MiddlewareOperator = (store: Store<any>) => {
+  return (next: Function) => (action: Action<any> | AsyncAction<any>) => {
     if (typeof action === 'function') {
         return next(action(store.dispatch, store.getState));
     }
@@ -34,10 +34,10 @@ export const thunkMiddleware = (): MiddlewareOperator => {
   };
 };
 
-export const sagaMiddleware = (): MiddlewareOperator => {
+export const sagaMiddleware: MiddlewareOperator = (store: Store<any>) => {
   const runningSagas = new Map();
 
-  return (store: Store<any>) => (next: Function) => (action: Action<any> | AsyncAction<any>) => {
+  return (next: Function) => (action: Action<any> | AsyncAction<any>) => {
     for (const effect of store.pipeline.effects) {
       if (
         typeof effect === 'function' &&
@@ -70,6 +70,7 @@ export const sagaMiddleware = (): MiddlewareOperator => {
           });
         } else {
           store.dispatch({ type: `${sagaName}_FINISHED` });
+          runningSagas.delete(sagaName);
         }
       });
     }
@@ -78,14 +79,11 @@ export const sagaMiddleware = (): MiddlewareOperator => {
   };
 };
 
-
-
-
-export const loggerMiddleware = (): MiddlewareOperator => {
-  return (store: Store<any>) => (next: Function) => (action: Action<any> | AsyncAction<any>) => {
-    console.log('[Middleware] Received action:', action);
-    const result = next(action);
-    console.log('[Middleware] Processed action:', action);
+export const loggerMiddleware: MiddlewareOperator = (store: Store<any>) => {
+  return (next: Function) => (action: Action<any> | AsyncAction<any>) => {
+    console.log('dispatching', action);
+    let result = next(action);
+    console.log('next state', store.getState());
     return result;
   };
 };

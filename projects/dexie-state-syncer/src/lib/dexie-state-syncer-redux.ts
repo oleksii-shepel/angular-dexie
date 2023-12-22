@@ -441,7 +441,7 @@ export interface Middleware {
   (store: any): (next: (action: any) => any) => Promise<(action: any) => any> | any;
 }
 
-export type MiddlewareOperator = (store: Store<any>) => (next: Function) => (action: Action<any> | AsyncAction<any>) => any;
+export type MiddlewareOperator = (store: Store<any>) => (next: Function) => (action: any) => any;
 
 // applyMiddleware function that accepts operator functions
 // function applyMiddleware(...operators: MiddlewareOperator[]) {
