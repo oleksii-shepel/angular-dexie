@@ -84,7 +84,7 @@ function isDate(val: any): boolean {
   return typeof val.toDateString === "function" && typeof val.getDate === "function" && typeof val.setDate === "function";
 }
 
-export type Reducer<T> = (state: T | undefined, action: Action<any>) => T | undefined
+export type Reducer = (state: any, action: Action<any>) => any
 
 
 export type SideEffect = () => (Generator<Promise<any>, any, any> | AsyncGenerator<Promise<any>, any, any>);
@@ -93,28 +93,28 @@ export type SideEffect = () => (Generator<Promise<any>, any, any> | AsyncGenerat
 export interface FeatureModule {
   slice: string;
   state: any;
-  reducer: Reducer<any>;
+  reducer: Reducer;
   effects: SideEffect[];
 }
 
 export interface MainModule {
   transformers: MiddlewareOperator[];
   processors: MiddlewareOperator[];
-  reducers: Record<string, Reducer<any>>;
+  reducers: Record<string, Reducer>;
   effects: SideEffect[];
 }
 
 export interface Store<K> {
   dispatch: (action: AsyncAction<any> | Action<any> | (() => AsyncGenerator<Promise<any>, any, any>) | (() => Generator<Promise<any>, any, any>)) => any;
   getState: () => K;
-  replaceReducer: (newReducer: Reducer<any>) => void;
+  replaceReducer: (newReducer: Reducer) => void;
   pipe: (...operators: Array<UnaryFunction<Observable<K>, Observable<any>>>) => Observable<any>;
   subscribe: (next?: AnyFn | Observer<any>, error?: AnyFn, complete?: AnyFn) => Promise<Subscription>;
   subscription: Subscription;
   pipeline: {
     transformers: (action: Action<any> | AsyncAction<any>) => any;
     processors: (action: Action<any> | AsyncAction<any>) => any;
-    reducer: Reducer<any>;
+    reducer: Reducer;
     effects: SideEffect[];
   };
   mainModule: MainModule;
@@ -147,7 +147,7 @@ const actionCreators = {
 
 // Define the reducer
 export function supervisor<K>(mainModule: MainModule) {
-  return (storeCreator: StoreCreator<K>) => (reducer: Reducer<any>, preloadedState?: K | undefined, enhancer?: Function) => {
+  return (storeCreator: StoreCreator<K>) => (reducer: Reducer, preloadedState?: K | undefined, enhancer?: Function) => {
     // Create the store as usual
     let store = storeCreator.store as any;
 
@@ -207,11 +207,11 @@ export function supervisor<K>(mainModule: MainModule) {
 }
 
 interface StoreCreator<K> extends Function {
-  (reducer: Reducer<any>, preloadedState?: K, enhancer?: Function): Store<K>;
+  (reducer: Reducer, preloadedState?: K, enhancer?: Function): Store<K>;
   store?: Store<K>;
 }
 
-const createStore: any = function <K>(reducer: Reducer<any>, preloadedState?: K | undefined, enhancer?: Function): Store<K> {
+const createStore: any = function <K>(reducer: Reducer, preloadedState?: K | undefined, enhancer?: Function): Store<K> {
 
   let store = createStore.store;
 
@@ -287,7 +287,7 @@ const createStore: any = function <K>(reducer: Reducer<any>, preloadedState?: K 
     }
   }
 
-  function replaceReducer(nextReducer: Reducer<any>): void {
+  function replaceReducer(nextReducer: Reducer): void {
     if (typeof nextReducer !== "function") {
       throw new Error(`Expected the nextReducer to be a function. Instead, received: '${kindOf(nextReducer)}`);
     }
@@ -369,7 +369,7 @@ function assertReducerShape(reducers: any): void {
 }
 
 function setupReducer(store: Store<any>) {
-  const reducers: Record<string, Reducer<any>> = {};
+  const reducers: Record<string, Reducer> = {};
 
   // Iterate over each module
   for (const moduleName in store.modules) {
@@ -385,7 +385,7 @@ function setupReducer(store: Store<any>) {
   return combineReducers(reducers);
 }
 
-function combineReducers(reducers: Record<string, Reducer<any>>): Reducer<any> {
+function combineReducers(reducers: Record<string, Reducer>): Reducer {
   const reducerKeys = Object.keys(reducers);
   const finalReducers: any = {};
 
@@ -449,7 +449,7 @@ export type MiddlewareOperator = (store: Store<any>) => (next: Function) => (act
 
 // applyMiddleware function that accepts operator functions
 // function applyMiddleware(...operators: MiddlewareOperator[]) {
-//   return (createStore: Function) => (reducer: Reducer<any>, preloadedState?: any) => {
+//   return (createStore: Function) => (reducer: Reducer, preloadedState?: any) => {
 //     const store = createStore(reducer, preloadedState);
 
 //     // Create a pipeline function that takes dispatch and getState
