@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { NgModule } from '@angular/core';
 
 import { Component, Inject, OnInit } from '@angular/core';
-import { Reducer, Store, StoreModule } from 'dexie-state-syncer';
+import { Action, Reducer, Store, StoreModule } from 'dexie-state-syncer';
 
 // Define some basic customers data
 const customersData = [
@@ -12,7 +12,7 @@ const customersData = [
 ];
 
 // Define a simple reducer
-const customersReducer: Reducer<any> = (state = customersData, action) => {
+const customersReducer: Reducer = (state = customersData, action: Action<any>) => {
   switch (action.type) {
     case 'CUSTOMERS_ACTION':
       return { ...state, customersData: action.payload };

@@ -19,7 +19,7 @@ import { AppComponent } from './app.component';
 
 export const tree = new InMemoryObjectState();
 
-function rootMetaReducer(reducer: Reducer<any>) {
+function rootMetaReducer(reducer: Reducer) {
   return function (state: any, action: Action<any>) {
     if (action.type === 'INIT_TREE' || action.type === 'UPDATE_TREE') {
       state = tree.descriptor();
@@ -53,8 +53,8 @@ function* rootSaga(): Generator<Promise<any>, any, any> {
     RouterModule.forRoot(routes),
     StoreModule.forRoot(
       {
-        transformers: [thunkMiddleware, sagaMiddleware],
-        processors: [loggerMiddleware],
+        transformers: [thunkMiddleware],
+        processors: [sagaMiddleware, loggerMiddleware],
         reducers: {},
         effects: [rootSaga],
       },
