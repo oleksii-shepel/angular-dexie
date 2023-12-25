@@ -104,11 +104,11 @@ export interface MainModule {
   effects: SideEffect[];
 }
 
-export interface Store<K> {
+export interface Store {
   dispatch: (action: AsyncAction<any> | Action<any> | (() => AsyncGenerator<Promise<any>, any, any>) | (() => Generator<Promise<any>, any, any>)) => any;
-  getState: () => K;
+  getState: () => any;
   replaceReducer: (newReducer: Reducer) => void;
-  pipe: (...operators: Array<UnaryFunction<Observable<K>, Observable<any>>>) => Observable<any>;
+  pipe: (...operators: Array<UnaryFunction<Observable<any>, Observable<any>>>) => Observable<any>;
   subscribe: (next?: AnyFn | Observer<any>, error?: AnyFn, complete?: AnyFn) => Promise<Subscription>;
   subscription: Subscription;
   pipeline: {
@@ -120,7 +120,7 @@ export interface Store<K> {
   mainModule: MainModule;
   modules: FeatureModule[];
   actionStream: ReplaySubject<Observable<Action<any>> | AsyncAction<any>>;
-  currentState: CustomAsyncSubject<K>;
+  currentState: CustomAsyncSubject<any>;
   isDispatching: boolean;
 }
 
@@ -146,8 +146,8 @@ const actionCreators = {
 };
 
 // Define the reducer
-export function supervisor<K>(mainModule: MainModule) {
-  return (storeCreator: StoreCreator<K>) => (reducer: Reducer, preloadedState?: K | undefined, enhancer?: Function) => {
+export function supervisor(mainModule: MainModule) {
+  return (storeCreator: StoreCreator) => (reducer: Reducer, preloadedState?: any, enhancer?: StoreEnhancer) => {
     // Create the store as usual
     let store = storeCreator.store as any;
 
@@ -206,12 +206,15 @@ export function supervisor<K>(mainModule: MainModule) {
   };
 }
 
-interface StoreCreator<K> extends Function {
-  (reducer: Reducer, preloadedState?: K, enhancer?: Function): Store<K>;
-  store?: Store<K>;
+interface StoreCreator extends Function {
+  (reducer: Reducer, preloadedState?: any, enhancer?: StoreEnhancer): Store;
+  store?: Store;
 }
 
-const createStore: any = function <K>(reducer: Reducer, preloadedState?: K | undefined, enhancer?: Function): Store<K> {
+export type StoreEnhancer = (next: StoreCreator) => StoreCreator;
+
+
+const createStore: any = function (reducer: Reducer, preloadedState?: any, enhancer?: StoreEnhancer): Store {
 
   let store = createStore.store;
 
@@ -238,7 +241,7 @@ const createStore: any = function <K>(reducer: Reducer, preloadedState?: K | und
     store.pipeline.effects = [];
 
     store.actionStream = new ReplaySubject<Observable<Action<any>> | AsyncAction<any>>();
-    store.currentState = new CustomAsyncSubject<K>(preloadedState as K) as any;
+    store.currentState = new CustomAsyncSubject<any>(preloadedState);
     store.isDispatching = false;
   }
 
@@ -263,7 +266,7 @@ const createStore: any = function <K>(reducer: Reducer, preloadedState?: K | und
   ).subscribe();
 
 
-  function getState(): K {
+  function getState(): any {
     return store.currentState.value;
   }
 
@@ -297,8 +300,8 @@ const createStore: any = function <K>(reducer: Reducer, preloadedState?: K | und
     });
   }
 
-  function pipe(...operators: Array<UnaryFunction<Observable<K>, Observable<any>>>): Observable<any> {
-    return operators.reduce((source, operator) => operator(source), toObservable<K>(store.currentState));
+  function pipe(...operators: Array<UnaryFunction<Observable<any>, Observable<any>>>): Observable<any> {
+    return operators.reduce((source, operator) => operator(source), toObservable<any>(store.currentState));
   }
 
   return {
@@ -312,7 +315,7 @@ const createStore: any = function <K>(reducer: Reducer, preloadedState?: K | und
   }
 }
 
-function loadModule(store: Store<any>, module: FeatureModule): Store<any> {
+function loadModule(store: Store, module: FeatureModule): Store {
   // Check if the module already exists in the store's modules
   if (store.modules.some(m => m.slice === module.slice)) {
     // If the module already exists, return the store without changes
@@ -333,7 +336,7 @@ function loadModule(store: Store<any>, module: FeatureModule): Store<any> {
 
 }
 
-function unloadModule(store: Store<any>, module: FeatureModule): Store<any> {
+function unloadModule(store: Store, module: FeatureModule): Store {
   // Create a new array with the module removed from the store's modules
   const newModules = store.modules.filter(m => m.slice !== module.slice);
 
@@ -368,7 +371,7 @@ function assertReducerShape(reducers: any): void {
   }
 }
 
-function setupReducer(store: Store<any>) {
+function setupReducer(store: Store) {
   const reducers: Record<string, Reducer> = {};
 
   // Iterate over each module
@@ -445,7 +448,7 @@ export interface Middleware {
   (store: any): (next: (action: any) => any) => Promise<(action: any) => any> | any;
 }
 
-export type MiddlewareOperator = (store: Store<any>) => (next: Function) => (action: any) => any;
+export type MiddlewareOperator = (store: Store) => (next: Function) => (action: any) => any;
 
 // applyMiddleware function that accepts operator functions
 // function applyMiddleware(...operators: MiddlewareOperator[]) {
@@ -466,7 +469,7 @@ export type MiddlewareOperator = (store: Store<any>) => (next: Function) => (act
 //   };
 // }
 
-function setupTransformers(store: Store<any>) {
+function setupTransformers(store: Store) {
   return (action: Action<any> | AsyncAction<any>) => {
     const chain = store.mainModule.transformers.reduceRight((next, transformer) => {
       return (action: Action<any> | AsyncAction<any>) => transformer(store)(next)(action);
@@ -477,7 +480,7 @@ function setupTransformers(store: Store<any>) {
   };
 }
 
-function setupProcessors(store: Store<any>) {
+function setupProcessors(store: Store) {
   return (action: Action<any>) => {
     const chain = store.mainModule.processors.reduceRight((next, processor) => {
       return (action: Action<any>) => {
@@ -493,7 +496,7 @@ function setupProcessors(store: Store<any>) {
 
 
 
-function registerEffects(store: Store<any>) {
+function registerEffects(store: Store) {
   // Iterate over each module and add its effects to the pipeline
   let effects = store.mainModule.effects ? [...store.mainModule.effects] : [];
   for (const module of store.modules) {
@@ -503,7 +506,7 @@ function registerEffects(store: Store<any>) {
   return effects;
 }
 
-function unregisterEffects(store: Store<any>, module: FeatureModule): SideEffect[] {
+function unregisterEffects(store: Store, module: FeatureModule): SideEffect[] {
   // Create a new array excluding the effects of the module to be unloaded
   const remainingEffects = store.pipeline.effects.filter(effect => !module.effects.includes(effect));
 

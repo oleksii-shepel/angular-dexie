@@ -30,7 +30,7 @@ const customersReducer: Reducer = (state = customersData, action: Action<any>) =
 })
 export class CustomerComponent implements OnInit {
   title = 'dexie-ngrx-store';
-  constructor(@Inject('Store') private store: Store<any>) {}
+  constructor(@Inject('Store') private store: Store) {}
 
   ngOnInit() {}
 }

@@ -8,7 +8,7 @@ import { Store, initTreeObservable, updateTreeObservable, updateTreeObservable1,
 })
 export class AppComponent implements OnInit {
   title = 'dexie-ngrx-store';
-  constructor(@Inject('Store') private store: Store<any>) {
+  constructor(@Inject('Store') private store: Store) {
 
   }
 

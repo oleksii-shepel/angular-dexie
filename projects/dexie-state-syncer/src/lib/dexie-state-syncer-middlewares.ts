@@ -18,14 +18,14 @@ export function sequential(middleware: Middleware): Middleware {
 }
 
 export function waitUntil(conditionFn: () => Observable<boolean>): MiddlewareOperator {
-  return (store: Store<any>) => (next: Function) => (action: Action<any> | AsyncAction<any>) =>
+  return (store: Store) => (next: Function) => (action: Action<any> | AsyncAction<any>) =>
     defer(conditionFn).pipe(
       first((value) => value === true),
       switchMap(() => next(action))
     );
 }
 
-export const thunkMiddleware: MiddlewareOperator = (store: Store<any>) => {
+export const thunkMiddleware: MiddlewareOperator = (store: Store) => {
   return (next: Function) => (action: Action<any> | AsyncAction<any>) => {
     if (typeof action === 'function') {
         return next(action(store.dispatch, store.getState));
@@ -35,7 +35,7 @@ export const thunkMiddleware: MiddlewareOperator = (store: Store<any>) => {
 };
 
 
-export const sagaMiddleware: MiddlewareOperator & { runningSagas: Map<string, any> } = (store: Store<any>) => {
+export const sagaMiddleware: MiddlewareOperator & { runningSagas: Map<string, any> } = (store: Store) => {
   let runningSagas = sagaMiddleware.runningSagas;
 
   return (next: Function) => (action: Action<any> | AsyncAction<any>) => {
@@ -93,7 +93,7 @@ export const sagaMiddleware: MiddlewareOperator & { runningSagas: Map<string, an
 
 sagaMiddleware.runningSagas = new Map();
 
-export const loggerMiddleware: MiddlewareOperator = (store: Store<any>) => {
+export const loggerMiddleware: MiddlewareOperator = (store: Store) => {
   return (next: Function) => (action: Action<any> | AsyncAction<any>) => {
     console.log('dispatching', action);
     let result = next(action);

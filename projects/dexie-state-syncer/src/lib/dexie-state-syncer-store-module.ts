@@ -4,7 +4,7 @@ import { FeatureModule, MainModule, Store, combineReducers, createStore, loadMod
 @NgModule({})
 export class StoreModule {
   static store: any = undefined;
-  static forRoot(module: MainModule, initialize?: (module: MainModule) => Store<any>): ModuleWithProviders<StoreModule> {
+  static forRoot(module: MainModule, initialize?: (module: MainModule) => Store): ModuleWithProviders<StoreModule> {
     return {
       ngModule: StoreModule,
       providers: [
@@ -15,7 +15,7 @@ export class StoreModule {
       ]
     };
   }
-  static forFeature(module: FeatureModule, initialize?: (store: Store<any>, module: FeatureModule) => void): ModuleWithProviders<StoreModule> {
+  static forFeature(module: FeatureModule, initialize?: (store: Store, module: FeatureModule) => void): ModuleWithProviders<StoreModule> {
     if(!StoreModule.store) {
       throw new Error('Store is not initialized. Have you forgot to call forRoot method?');
     }
