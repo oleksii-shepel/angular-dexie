@@ -270,11 +270,11 @@ const createStore: any = function (reducer: Reducer, preloadedState?: any, enhan
     return store.currentState.value;
   }
 
-  async function subscribe(next?: AnyFn | Observer<any>, error?: AnyFn, complete?: AnyFn): Promise<Subscription> {
+  function subscribe(next?: AnyFn | Observer<any>, error?: AnyFn, complete?: AnyFn): Subscription {
     if (typeof next === 'function') {
-      return await store.currentState.subscribe({next, error, complete});
+      return store.currentState.subscribe({next, error, complete});
     } else {
-      return await store.currentState.subscribe(next as Partial<AsyncObserver<any>>);
+      return store.currentState.subscribe(next as Partial<AsyncObserver<any>>);
     }
   }
 

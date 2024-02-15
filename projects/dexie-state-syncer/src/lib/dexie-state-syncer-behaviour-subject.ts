@@ -3,7 +3,7 @@ import { Observable, Subscription } from 'rxjs';
 
 export function toObservable<T>(customAsyncSubject: CustomAsyncSubject<T>): Observable<T> {
   return new Observable<T>((subscriber) => {
-    customAsyncSubject.subscribe({
+    const subscription = customAsyncSubject.subscribe({
       next: async (value) => {
         subscriber.next(value);
       },
@@ -13,9 +13,9 @@ export function toObservable<T>(customAsyncSubject: CustomAsyncSubject<T>): Obse
       complete: async () => {
         subscriber.complete();
       }
-    }).then((subscription) => {
-      return () => subscription.unsubscribe();
     });
+
+    return () => subscription.unsubscribe();
   });
 }
 
@@ -30,7 +30,7 @@ export class AsyncObservable<T> {
 
   constructor() {}
 
-  async subscribe(observer: AsyncObserver<T>): Promise<Subscription> {
+  subscribe(observer: AsyncObserver<T>): Subscription {
     this.observers.push(observer);
     return {
       unsubscribe: () => {
@@ -63,13 +63,9 @@ export class CustomAsyncSubject<T> extends AsyncObservable<T> {
     this._value = initialValue;
   }
 
-  override async subscribe(observer: Partial<AsyncObserver<T>>): Promise<Subscription> {
-    // Emit the current value to the observer as soon as it subscribes
-    if (observer.next) {
-      await observer.next(this._value);
-    }
+  override subscribe(observer: Partial<AsyncObserver<T>>): Subscription {
     // Convert the unsubscribe function to a Subscription object
-    return await super.subscribe(observer as AsyncObserver<T>);
+    return super.subscribe(observer as AsyncObserver<T>);
   }
 
   async next(value: T): Promise<void> {
