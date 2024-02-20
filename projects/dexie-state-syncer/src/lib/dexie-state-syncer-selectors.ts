@@ -24,7 +24,7 @@ export interface MemoizedProjectionFunction extends MemoizedFunction, Projection
 }
 
 export interface MemoizedSelector extends MemoizedFunction {
-  (props: any | any[], projectorProps?: any): Promise<(state: any) => any> | any;
+  (props: any | any[], projectionProps?: any): Promise<(state: any) => any> | any;
   release: () => any;
 }
 
