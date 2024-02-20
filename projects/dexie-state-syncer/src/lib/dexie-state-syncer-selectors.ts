@@ -6,7 +6,7 @@ export interface SelectorFunction {
   (state: any, props: any): any;
 }
 
-export interface ProjectorFunction {
+export interface ProjectionFunction {
   (state: any | any[], props: any): any;
 }
 
@@ -19,7 +19,7 @@ export interface MemoizedSelectorFunction extends MemoizedFunction, SelectorFunc
 
 }
 
-export interface MemoizedProjectorFunction extends MemoizedFunction, ProjectorFunction {
+export interface MemoizedProjectionFunction extends MemoizedFunction, ProjectionFunction {
 
 }
 
@@ -139,53 +139,52 @@ export function nomemoize(fn: AnyFn) {
 
 export function createSelector(
   selectors: SelectorFunction | SelectorFunction[],
-  projectorOrOptions?: ProjectorFunction | { memoizeSelectors?: AnyFn; memoizeProjector?: AnyFn },
-  options: { memoizeSelectors?: AnyFn; memoizeProjector?: AnyFn } = {}
+  projectionOrOptions?: ProjectionFunction | { memoizeSelectors?: AnyFn; memoizeProjection?: AnyFn },
+  options: { memoizeSelectors?: AnyFn; memoizeProjection?: AnyFn } = {}
 ): MemoizedSelector {
+  options = (typeof projectionOrOptions !== "function" ? projectionOrOptions : options) || {};
+
   const isSelectorArray = Array.isArray(selectors);
   const selectorArray: SelectorFunction[] = isSelectorArray ? selectors : [selectors];
+  const projection = typeof projectionOrOptions === "function" ? projectionOrOptions : undefined;
 
-  let projector: ProjectorFunction | undefined;
-  let memoizeSelectors: AnyFn;
-  let memoizeProjector: AnyFn;
+  // Default memoization functions if not provided
+  const memoizeSelector = options.memoizeSelectors || nomemoize;
+  const memoizeProjection = options.memoizeProjection || nomemoize;
 
-  if (typeof projectorOrOptions === 'function') {
-    projector = projectorOrOptions;
-    memoizeSelectors = options.memoizeSelectors || asyncMemoize;
-    memoizeProjector = options.memoizeProjector || defaultMemoize;
-  } else {
-    memoizeSelectors = (projectorOrOptions && projectorOrOptions.memoizeSelectors) || asyncMemoize;
-    memoizeProjector = (projectorOrOptions && projectorOrOptions.memoizeProjector) || defaultMemoize;
+  if (isSelectorArray && !projection) {
+    throw new Error("Invalid parameters: When 'selectors' is an array, 'projection' function should be provided.");
   }
 
-  if (isSelectorArray && !projector) {
-    throw new Error("Invalid parameters: When 'selectors' is an array, 'projector' function should be provided.");
-  }
+  // Memoize each selector
+  const memoizedSelectors = memoizeSelector === nomemoize ? selectorArray : selectorArray.map(selector => memoizeSelector(selector));
+  // If a projection is provided, memoize it; otherwise, use identity function
+  const memoizedProjection = projection ? (memoizeProjection === nomemoize ? projection : memoizeProjection(projection)) : undefined;
 
-  const memoizedSelectors = selectorArray.map(selector => memoizeSelectors(selector));
-  const memoizedProjector = projector ? memoizeProjector(projector) : (result: any) => result;
-
-  // The memoizedSelector function will return a function that returns a Promise
-  const memoizedSelector: MemoizedSelector = (props: any, projectorProps?: any) => {
-    // Return a function that when called with 'state', will execute the selectors and projector
-    return (state: any) => {
-      // Use Promise.all to handle both async and sync selectors
-      const selectorPromises = memoizedSelectors.map(selector => Promise.resolve(selector(state, props)));
-      return Promise.all(selectorPromises).then(resolvedSelectors => {
-        // Apply the projector function to the resolved selector values
-        // Make sure to pass both the resolvedSelectors and projectorProps to the projector
-        return memoizedProjector(...resolvedSelectors, projectorProps);
-      });
-    };
+  // The memoizedSelector function will return a function that executes the selectors and projection
+  const memoizedSelector: MemoizedSelector = (state: any, props?: any) => {
+    // Execute each selector with the state and props
+    const resolvedSelectors = memoizedSelectors
+      .map(selector => selector(state, props))
+      .map(result => result instanceof Promise || result?.then instanceof Function ? result : Promise.resolve(result));
+    // Wait for all the promises to resolve
+    return Promise.all(resolvedSelectors).then(values => {
+      // Apply the projection function to the resolved values
+      return memoizedProjection ? memoizedProjection(...values) : values[0];
+    });
   };
 
+  // Optional: Implement a release method if your memoization functions require cleanup
   memoizedSelector.release = () => {
-    memoizedSelectors.forEach(selector => selector.release());
-    projector && memoizedProjector.release();
+    // Release logic here, if necessary
+    memoizedSelectors !== selectorArray && memoizedSelectors.forEach(selector => selector.release());
+    projection && memoizedProjection.release();
   };
 
   return memoizedSelector;
 }
+
+
 
 export function select<T, K>(selector: ((state: T) => K) | Promise<K>): OperatorFunction<T, K> {
   return (source: Observable<T>): Observable<K> => {
