@@ -1,4 +1,3 @@
-import { Observable, OperatorFunction, exhaustMap, from, mergeMap, of } from "rxjs";
 
 export type AnyFn = (...args: any[]) => any;
 
@@ -10,31 +9,17 @@ export interface ProjectionFunction {
   (state: any | any[], props: any): any;
 }
 
-export interface MemoizedFunction {
+export interface MemoizedFn extends AnyFn {
   (...args: any[]): any;
   release: () => any;
 }
 
-export interface MemoizedSelectorFunction extends MemoizedFunction, SelectorFunction {
-
-}
-
-export interface MemoizedProjectionFunction extends MemoizedFunction, ProjectionFunction {
-
-}
-
-export interface MemoizedSelector extends MemoizedFunction {
-  (props: any | any[], projectionProps?: any): Promise<(state: any) => any> | any;
-  release: () => any;
-}
-
-
-const defaultMemoize: AnyFn = (fn: AnyFn): MemoizedFunction => {
+const defaultMemoize: AnyFn = (fn: AnyFn): AnyFn => {
   let lastArgs: any[] | undefined = undefined;
   let lastResult: any | undefined = undefined;
   let called = false;
 
-  const resultFunc: MemoizedFunction = (...args: any[]): any => {
+  const resultFunc: MemoizedFn = (...args: any[]): any => {
     if (called && lastArgs !== undefined && args.length === lastArgs.length) {
       let argsEqual = true;
       for (let i = 0; i < args.length; i++) {
@@ -86,11 +71,11 @@ const prune = (obj: any, depth = 1): any => {
 
 const stringify = (obj: any, depth = 1, space: number) => JSON.stringify(prune(obj, depth), null, space);
 
-function asyncMemoize(fn: AnyFn): MemoizedFunction {
+function asyncMemoize(fn: AnyFn): AnyFn {
   let isAsync: boolean | undefined;
   const cache = new Map<string, Promise<any>>();
 
-  const memoizedFn: MemoizedFunction = (...args: any[]): any => {
+  const memoizedFn: MemoizedFn = (...args: any[]): any => {
     const key = stringify(args, 2, 0);
 
     if (cache.has(key)) {
@@ -138,14 +123,14 @@ export function nomemoize(fn: AnyFn) {
 }
 
 export function createSelector(
-  selectors: SelectorFunction | SelectorFunction[],
+  selectors: AnyFn | AnyFn[] | Promise<MemoizedFn> | Promise<MemoizedFn>[],
   projectionOrOptions?: ProjectionFunction | { memoizeSelectors?: AnyFn; memoizeProjection?: AnyFn },
   options: { memoizeSelectors?: AnyFn; memoizeProjection?: AnyFn } = {}
-): (props?: any[] | any, projectionProps?: any) => Promise<MemoizedSelector> {
+): (props?: any[] | any, projectionProps?: any) => Promise<MemoizedFn> {
   options = (typeof projectionOrOptions !== "function" ? projectionOrOptions : options) || {};
 
   const isSelectorArray = Array.isArray(selectors);
-  const selectorArray: SelectorFunction[] = isSelectorArray ? selectors : [selectors];
+  const selectorArray: (AnyFn | Promise<MemoizedFn>)[] = isSelectorArray ? selectors : [selectors];
   const projection = typeof projectionOrOptions === "function" ? projectionOrOptions : undefined;
 
   // Default memoization functions if not provided
@@ -161,55 +146,36 @@ export function createSelector(
   // If a projection is provided, memoize it; otherwise, use identity function
   const memoizedProjection = projection ? (memoizeProjection === nomemoize ? projection : memoizeProjection(projection)) : undefined;
 
-  // The createSelectorAsync function will return a function that takes some arguments and returns a memoizedSelector function
-  return async (props: any[] | any, projectionProps: any) => {
+  // The createSelectorAsync function will return a function that takes some arguments and returns a Promise that resolves to a SelectorFunction or an array of SelectorFunctions
+  return async (props?: any[] | any, projectionProps?: any) => {
     if(!Array.isArray(props)) {
       props = [props];
     }
     // The memoizedSelector function will return a function that executes the selectors and projection
-    const memoizedSelector = async (state: any) => {
+    const fn = async (state: any) => {
       // Execute each selector with the state and props
-      const resolvedSelectors = memoizedSelectors
-        .map((selector, index) => selector(state, props[index]))
-        .map(result => result instanceof Promise || result?.then instanceof Function ? result : Promise.resolve(result));
+      const resolvedSelectors = await Promise.all(memoizedSelectors.map(async (selector, index) => {
+        const result = await (selector instanceof Promise ? selector : Promise.resolve(selector(state, props[index])));
+        return result;
+      }));
 
-      // Wait for all the promises to resolve
-      const values = await Promise.all(resolvedSelectors);
-
-      // Apply the projection function to the resolved values
-      return memoizedProjection ? memoizedProjection(...values, projectionProps) : values[0];
+      if(resolvedSelectors.length === 1) {
+        // Apply the projection function to the resolved values
+        return memoizedProjection ? memoizedProjection(resolvedSelectors[0], projectionProps) : resolvedSelectors[0];
+      } else {
+        return memoizedProjection ? memoizedProjection(resolvedSelectors, projectionProps) : undefined;
+      }
     };
 
-    const selector = (await memoizedSelector) as MemoizedSelector;
+    const selector = await fn as any;
 
-    // Optional: Implement a release method if your memoization functions require cleanup
+    // Implement a release method if your memoization functions require cleanup
     selector.release = () => {
       // Release logic here, if necessary
-      memoizedSelectors !== selectorArray && memoizedSelectors.forEach(ms => ms.release());
-      projection && memoizedProjection.release();
-    };
+      memoizedSelectors !== selectorArray && memoizedSelectors.forEach(ms => ms.release && ms.release());
+      projection && memoizedProjection.release && memoizedProjection.release();
+    }
 
     return selector;
   };
 }
-
-
-export function select<T, K>(selector: ((state: T) => K) | Promise<K>): OperatorFunction<T, K> {
-  return (source: Observable<T>): Observable<K> => {
-    return source.pipe(
-      exhaustMap(state => {
-        if (selector instanceof Promise) {
-          // Resolve the promise and then emit its value
-          return from(selector).pipe(
-            mergeMap(resolvedValue => of(resolvedValue))
-          );
-        } else {
-          // 'selector' is a function, call it directly
-          return of(selector(state));
-        }
-      })
-    );
-  };
-}
-
-
