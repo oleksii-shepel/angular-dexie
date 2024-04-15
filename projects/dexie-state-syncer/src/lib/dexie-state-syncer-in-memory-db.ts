@@ -1,6 +1,6 @@
+import { isPrimitive } from "@actioncrew/actionstack";
 import Dexie from "dexie";
 import { StateDescriptor, StateNode, StateObjectDatabase } from './dexie-state-syncer-db';
-import { primitive } from "./dexie-state-syncer-reducer";
 
 
 export class StateObjectInMemoryDatabase extends StateObjectDatabase {
@@ -124,7 +124,7 @@ export class InMemoryObjectState {
           left: undefined,
           right: undefined,
           parent: parent,
-          data: primitive(data) ? data : undefined,
+          data: isPrimitive(data) ? data : undefined,
         });
 
         const newNode_1 = await this.db.get(this.autoincrement);

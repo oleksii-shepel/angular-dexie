@@ -1,5 +1,5 @@
+import { isPrimitive } from '@actioncrew/actionstack';
 import Dexie from 'dexie';
-import { primitive } from "./dexie-state-syncer-reducer";
 
 export interface StateNode {
   id?: number;
@@ -146,7 +146,7 @@ export class ObjectState {
           left: undefined,
           right: undefined,
           parent: parent,
-          data: primitive(data) ? data : undefined,
+          data: isPrimitive(data) ? data : undefined,
         });
 
         const newNode_1 = await this.db.get(this.autoincrement);

@@ -1,8 +1,8 @@
+import { Action, Reducer, Store, StoreModule } from '@actioncrew/actionstack';
 import { CommonModule } from '@angular/common';
 import { NgModule } from '@angular/core';
 
-import { Component, Inject, OnInit } from '@angular/core';
-import { Action, Reducer, Store, StoreModule } from 'dexie-state-syncer';
+import { Component, OnInit } from '@angular/core';
 
 // Define some basic customers data
 const customersData = [
@@ -30,7 +30,7 @@ const customersReducer: Reducer = (state = customersData, action: Action<any>) =
 })
 export class CustomerComponent implements OnInit {
   title = 'dexie-ngrx-store';
-  constructor(@Inject('Store') private store: Store) {}
+  constructor(private store: Store) {}
 
   ngOnInit() {}
 }
@@ -43,9 +43,7 @@ export class CustomerComponent implements OnInit {
     CommonModule,
     StoreModule.forFeature({
       slice: 'customers',
-      state: customersData,
       reducer: customersReducer,
-      effects: []
     })
   ]
 })

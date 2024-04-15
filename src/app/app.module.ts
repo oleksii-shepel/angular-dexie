@@ -1,20 +1,14 @@
-import { NgModule } from '@angular/core';
-import { BrowserModule } from '@angular/platform-browser';
 import {
   Action,
-  InMemoryObjectState,
-  MainModule,
   Reducer,
   StoreModule,
-  combineReducers,
-  createStore,
-  loggerMiddleware,
-  sagaMiddleware,
-  supervisor,
-  thunkMiddleware
-} from 'dexie-state-syncer';
+  perfmon
+} from '@actioncrew/actionstack';
+import { NgModule } from '@angular/core';
+import { BrowserModule } from '@angular/platform-browser';
 
 import { RouterModule, Routes } from '@angular/router';
+import { InMemoryObjectState } from 'dexie-state-syncer';
 import { AppComponent } from './app.component';
 
 export const tree = new InMemoryObjectState();
@@ -43,9 +37,6 @@ const routes: Routes = [
   },
 ];
 
-function* rootSaga(): Generator<Promise<any>, any, any> {
-  console.log('Hello from saga');
-};
 @NgModule({
   declarations: [AppComponent],
   imports: [
@@ -53,16 +44,9 @@ function* rootSaga(): Generator<Promise<any>, any, any> {
     RouterModule.forRoot(routes),
     StoreModule.forRoot(
       {
-        transformers: [thunkMiddleware],
-        processors: [sagaMiddleware, loggerMiddleware],
-        reducers: {},
-        effects: [rootSaga],
-      },
-      (module: MainModule) =>
-        createStore(
-          rootMetaReducer(combineReducers(module.reducers)),
-          supervisor(module)
-        )
+        middleware: [perfmon],
+        reducer: (state: any = {}, action: Action<any>) => state,
+      }
     ),
   ],
   providers: [],
