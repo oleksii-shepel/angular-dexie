@@ -251,59 +251,6 @@ export class InMemoryObjectState {
     }
   }
 
-  async touchNode(id: number, updates: { left?: number; right?: number; parent?: number; }): Promise<StateNode | undefined> {
-    try {
-      return await this.db.transaction('rw', this.db.stateNodes, async () => {
-        let node = await this.db.get(id);
-        if (!node) {
-          throw new Error('Node not found');
-        }
-
-        // Create a clone of the node with a new ID
-        let newNode: StateNode = {
-          ...node,
-          ...updates,
-          id: this.autoincrement // Assign a new ID from autoincrement
-        };
-
-        // Save the new node to the database with the new ID
-        await this.db.set(newNode);
-
-        // Update the 'left' reference of the parent node, if applicable
-        if (node.parent) {
-          let parentNode = await this.db.get(node.parent);
-          if (parentNode && parentNode.left === id) {
-            parentNode.left = this.autoincrement;
-            await this.db.set(parentNode);
-          }
-        }
-
-        // Update the 'right' reference of the previous sibling node, if applicable
-        if (node.parent) {
-          let siblingNodes = await this.db.stateNodes.where({ parent: node.parent }).toArray();
-          for (const sibling of siblingNodes) {
-            if (sibling.right === id) {
-              sibling.right = this.autoincrement;
-              await this.db.set(sibling);
-              break;
-            }
-          }
-        }
-
-        // Remove the old node from the database
-        await this.db.remove(id);
-
-        // Increment the autoincrement value for the next node
-        this.autoincrement++;
-
-        return newNode; // Return the new node
-      });
-    } catch (err) {
-      console.error(err);
-      return Promise.reject(err);
-    }
-  }
-
   async getData(node: StateNode): Promise<any> {
     try {
       return await this.db.transaction('r', this.db.stateNodes, async () => {
@@ -447,8 +394,6 @@ export class InMemoryObjectState {
             if (!nextChild) {
               nextChild = parent ? await this.createNode(part, undefined, parent.id) : undefined;
               parent = nextChild; // Update the parent reference
-            } else {
-              await this.touchNode(nextChild.id!, {});
             }
           }
 
