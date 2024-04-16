@@ -3,34 +3,67 @@
   "version": 1,
   "newProjectRoot": "projects",
   "projects": {
-    "dexie-ngrx-store": {
+    "dexie-state-syncer": {
+      "projectType": "library",
+      "root": "projects/dexie-state-syncer",
+      "sourceRoot": "projects/dexie-state-syncer/src",
+      "prefix": "lib",
+      "architect": {
+        "build": {
+          "builder": "@angular-devkit/build-angular:ng-packagr",
+          "options": {
+            "project": "projects/dexie-state-syncer/ng-package.json"
+          },
+          "configurations": {
+            "production": {
+              "tsConfig": "projects/dexie-state-syncer/tsconfig.lib.prod.json"
+            },
+            "development": {
+              "tsConfig": "projects/dexie-state-syncer/tsconfig.lib.json"
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "test": {
+          "builder": "@angular-devkit/build-angular:karma",
+          "options": {
+            "tsConfig": "projects/dexie-state-syncer/tsconfig.spec.json",
+            "polyfills": [
+              "zone.js",
+              "zone.js/testing"
+            ]
+          }
+        }
+      }
+    },
+    "app": {
       "projectType": "application",
       "schematics": {
         "@schematics/angular:component": {
           "style": "scss"
         }
       },
-      "root": "",
-      "sourceRoot": "src",
+      "root": "projects/app",
+      "sourceRoot": "projects/app/src",
       "prefix": "app",
       "architect": {
         "build": {
           "builder": "@angular-devkit/build-angular:browser",
           "options": {
-            "outputPath": "dist/dexie-ngrx-store",
-            "index": "src/index.html",
-            "main": "src/main.ts",
+            "outputPath": "dist/app",
+            "index": "projects/app/src/index.html",
+            "main": "projects/app/src/main.ts",
             "polyfills": [
               "zone.js"
             ],
-            "tsConfig": "tsconfig.app.json",
+            "tsConfig": "projects/app/tsconfig.app.json",
             "inlineStyleLanguage": "scss",
             "assets": [
-              "src/favicon.ico",
-              "src/assets"
+              "projects/app/src/favicon.ico",
+              "projects/app/src/assets"
             ],
             "styles": [
-              "src/styles.scss"
+              "projects/app/src/styles.scss"
             ],
             "scripts": []
           },
@@ -65,10 +98,10 @@
           "builder": "@angular-devkit/build-angular:dev-server",
           "configurations": {
             "production": {
-              "browserTarget": "dexie-ngrx-store:build:production"
+              "browserTarget": "app:build:production"
             },
             "development": {
-              "browserTarget": "dexie-ngrx-store:build:development"
+              "browserTarget": "app:build:development"
             }
           },
           "defaultConfiguration": "development"
@@ -76,7 +109,7 @@
         "extract-i18n": {
           "builder": "@angular-devkit/build-angular:extract-i18n",
           "options": {
-            "browserTarget": "dexie-ngrx-store:build"
+            "browserTarget": "app:build"
           }
         },
         "test": {
@@ -86,49 +119,16 @@
               "zone.js",
               "zone.js/testing"
             ],
-            "tsConfig": "tsconfig.spec.json",
+            "tsConfig": "projects/app/tsconfig.spec.json",
             "inlineStyleLanguage": "scss",
             "assets": [
-              "src/favicon.ico",
-              "src/assets"
+              "projects/app/src/favicon.ico",
+              "projects/app/src/assets"
             ],
             "styles": [
-              "src/styles.scss"
+              "projects/app/src/styles.scss"
             ],
             "scripts": []
-          }
-        }
-      }
-    },
-    "dexie-state-syncer": {
-      "projectType": "library",
-      "root": "projects/dexie-state-syncer",
-      "sourceRoot": "projects/dexie-state-syncer/src",
-      "prefix": "lib",
-      "architect": {
-        "build": {
-          "builder": "@angular-devkit/build-angular:ng-packagr",
-          "options": {
-            "project": "projects/dexie-state-syncer/ng-package.json"
-          },
-          "configurations": {
-            "production": {
-              "tsConfig": "projects/dexie-state-syncer/tsconfig.lib.prod.json"
-            },
-            "development": {
-              "tsConfig": "projects/dexie-state-syncer/tsconfig.lib.json"
-            }
-          },
-          "defaultConfiguration": "production"
-        },
-        "test": {
-          "builder": "@angular-devkit/build-angular:karma",
-          "options": {
-            "tsConfig": "projects/dexie-state-syncer/tsconfig.spec.json",
-            "polyfills": [
-              "zone.js",
-              "zone.js/testing"
-            ]
           }
         }
       }
