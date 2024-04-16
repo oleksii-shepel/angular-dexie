@@ -1,6 +1,6 @@
 import {
   Action,
-  Reducer,
+  AsyncReducer,
   StoreModule
 } from '@actioncrew/actionstack';
 import { perfmon } from '@actioncrew/actionstack/tools';
@@ -13,13 +13,13 @@ import { AppComponent } from './app.component';
 
 export const tree = new InMemoryObjectState();
 
-function rootMetaReducer(reducer: Reducer) {
-  return function (state: any, action: Action<any>) {
+async function rootMetaReducer(reducer: AsyncReducer) {
+  return async function (state: any, action: Action<any>) {
     if (action.type === 'INIT_TREE' || action.type === 'UPDATE_TREE') {
       state = tree.descriptor();
       return state;
     }
-    return reducer(state, action);
+    return await reducer(state, action);
   };
 }
 
@@ -45,6 +45,7 @@ const routes: Routes = [
     StoreModule.forRoot(
       {
         middleware: [perfmon],
+        metaReducers: [rootMetaReducer],
         reducer: (state: any = {}, action: Action<any>) => state,
       }
     ),

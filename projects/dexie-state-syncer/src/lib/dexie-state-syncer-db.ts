@@ -110,8 +110,8 @@ export class ObjectState {
         let nodeValue = await this.db.get(id);
         return nodeValue?.left === undefined;
       });
-    } catch (err) {
-      return Promise.reject(err);
+    } catch (err: any) {
+      return Promise.reject(err.message);
     }
   }
 
@@ -165,8 +165,8 @@ export class ObjectState {
         }
         return newNode_1;
       });
-    } catch (err) {
-      return Promise.reject();
+    } catch (err: any) {
+      return Promise.reject(err.message);
     }
   }
 
@@ -175,8 +175,8 @@ export class ObjectState {
       return await this.db.transaction('r', this.db.stateNodes, async () => {
         return await this.db.get(id);
       });
-    } catch (err) {
-      return Promise.reject(err);
+    } catch (err: any) {
+      return Promise.reject(err.message);
     }
   }
 
@@ -197,8 +197,8 @@ export class ObjectState {
 
         return undefined;
       });
-    } catch (err) {
-      return Promise.reject(err);
+    } catch (err: any) {
+      return Promise.reject(err.message);
     }
   }
 
@@ -292,8 +292,8 @@ export class ObjectState {
 
         return data;
       });
-    } catch (err) {
-      return Promise.reject(err);
+    } catch (err: any) {
+      return Promise.reject(err.message);
     }
   }
 
@@ -372,8 +372,8 @@ export class ObjectState {
 
         return node;
       });
-    } catch (err) {
-      return Promise.reject(err);
+    } catch (err: any) {
+      return Promise.reject(err.message);
     }
   }
 
@@ -383,8 +383,8 @@ export class ObjectState {
         let subtree = await this.find(path);
         return subtree !== undefined ? await this.getData(subtree) : undefined;
       });
-    } catch (err) {
-      return Promise.reject(err);
+    } catch (err: any) {
+      return Promise.reject(err.message);
     }
   }
 
@@ -451,8 +451,8 @@ export class ObjectState {
         await this.delete(path);
         return await this.create(obj, path);
       });
-    } catch (err) {
-      return Promise.reject(err);
+    } catch (err: any) {
+      return Promise.reject(err.message);
     }
   }
 
@@ -523,8 +523,8 @@ export class ObjectState {
           }
         }
       }
-    } catch (err) {
-      return Promise.reject(err);
+    } catch (err: any) {
+      return Promise.reject(err.message);
     }
   }
 }

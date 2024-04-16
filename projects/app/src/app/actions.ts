@@ -1,16 +1,10 @@
 
-import { createAction, props } from '@ngrx/store';
+import { action } from '@actioncrew/actionstack';
 
 export enum FormActions {
-  UpdateForm = '@forms/form/update',
-  UpdateControl = '@forms/form/control/update',
+  InitTree = 'INIT_TREE',
+  UpdateTree = 'UPDATE_TREE',
 }
 
-export enum FormActionsInternal {
-  AutoInit = '@forms/form/init',
-  AutoSubmit = '@forms/form/submit',
-  FormDestroyed = '@forms/form/destroyed',
-}
-
-export const initTree = createAction(FormActionsInternal.AutoInit, props<{ init: boolean }>());
-export const updateTree = createAction(FormActions.UpdateForm, props<{ init: boolean }>());
+export const initTree = action(FormActions.InitTree, (tree: any) => ({tree}));
+export const updateTree = action(FormActions.UpdateTree, (parent: any, subtree: any) => ({parent, subtree}));
