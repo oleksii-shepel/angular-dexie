@@ -17,10 +17,10 @@ async function rootMetaReducer(reducer: AsyncReducer) {
   return async function (state: any, action: Action<any>) {
     switch (action.type) {
       case 'INIT_TREE':
-        tree.initialize(action.payload.tree);
+        await tree.initialize(action.payload.tree);
         return tree.descriptor();
       case 'UPDATE_TREE':
-        tree.update(action.payload.parent, action.payload.subtree);
+        await tree.update(action.payload.parent, action.payload.subtree);
         return tree.descriptor();
       default:
         await reducer(state, action);
