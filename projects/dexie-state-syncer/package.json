@@ -6,7 +6,7 @@
     "@angular/core": "^16.2.0"
   },
   "dependencies": {
-    "@actioncrew/actionstack": "^1.0.8",
+    "@actioncrew/actionstack": "^1.0.9",
     "dexie": "^3.2.4",
     "tslib": "^2.3.0"
   },
