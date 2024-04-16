@@ -15,12 +15,18 @@ export const tree = new InMemoryObjectState();
 
 async function rootMetaReducer(reducer: AsyncReducer) {
   return async function (state: any, action: Action<any>) {
-    if (action.type === 'INIT_TREE' || action.type === 'UPDATE_TREE') {
-      state = tree.descriptor();
-      return state;
+    switch (action.type) {
+      case 'INIT_TREE':
+        tree.initialize(action.payload.tree);
+        return tree.descriptor();
+      case 'UPDATE_TREE':
+        tree.update(action.payload.parent, action.payload.subtree);
+        return tree.descriptor();
+      default:
+        await reducer(state, action);
+        return tree.descriptor();
     }
-    return await reducer(state, action);
-  };
+  }
 }
 
 const routes: Routes = [

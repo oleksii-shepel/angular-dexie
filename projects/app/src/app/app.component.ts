@@ -1,6 +1,7 @@
 import { Store } from '@actioncrew/actionstack';
 import { Component, OnInit } from '@angular/core';
 import { initTree, updateTree } from './actions';
+import { selectTree } from './selectors';
 
 @Component({
   selector: 'app-root',
@@ -13,6 +14,10 @@ export class AppComponent implements OnInit {
   }
 
   ngOnInit() {
+    this.store.select(selectTree()).subscribe((value) => {
+      console.log(value)
+    });
+
     this.store.dispatch(initTree({
       a: 'sdsd',
       b: {
