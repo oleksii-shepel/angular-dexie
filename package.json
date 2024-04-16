@@ -1,6 +1,6 @@
 {
-  "name": "dexie-ngrx-store",
-  "version": "0.0.0",
+  "name": "dexie-actionstack-store",
+  "version": "0.0.1",
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
