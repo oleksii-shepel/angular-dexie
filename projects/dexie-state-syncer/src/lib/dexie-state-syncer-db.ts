@@ -29,7 +29,7 @@ export class StateObjectDatabase extends Dexie {
   }
 
   async clear() {
-    await this.stateNodes.clear();
+    return await this.stateNodes.clear();
   }
 
   async populate() {

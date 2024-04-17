@@ -15,7 +15,7 @@ export class AppComponent implements OnInit {
 
   ngOnInit() {
     this.store.select(selectTree()).subscribe((value) => {
-      console.log(value)
+      console.log(value);
     });
 
     this.store.dispatch(initTree({

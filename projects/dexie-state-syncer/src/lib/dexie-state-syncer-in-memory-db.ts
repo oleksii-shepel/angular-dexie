@@ -13,7 +13,7 @@ export class StateObjectInMemoryDatabase extends StateObjectDatabase {
   }
 
   override async clear() {
-    await Promise.resolve(this.nodes.clear());
+    return await Promise.resolve(this.nodes.clear());
   }
 
   override async populate() {
