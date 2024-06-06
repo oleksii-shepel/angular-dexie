@@ -11,7 +11,7 @@
   },
   "private": true,
   "dependencies": {
-    "@actioncrew/actionstack": "^1.0.12",
+    "@actioncrew/actionstack": "^1.0.24",
     "@angular/animations": "^16.2.0",
     "@angular/common": "^16.2.0",
     "@angular/compiler": "^16.2.0",

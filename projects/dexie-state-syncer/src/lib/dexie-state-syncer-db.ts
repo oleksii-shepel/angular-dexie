@@ -1,4 +1,3 @@
-import { isPrimitive } from '@actioncrew/actionstack';
 import Dexie from 'dexie';
 
 export interface StateNode {
@@ -146,7 +145,7 @@ export class ObjectState {
           left: undefined,
           right: undefined,
           parent: parent,
-          data: isPrimitive(data) ? data : undefined,
+          data: data,
         });
 
         const newNode_1 = await this.db.get(this.autoincrement);
