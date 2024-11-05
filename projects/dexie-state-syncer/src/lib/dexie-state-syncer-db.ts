@@ -6,6 +6,7 @@ export interface StateNode {
   left: number | undefined;
   right: number | undefined;
   parent: number | undefined;
+  marker: number;
   data: any;
 }
 
@@ -115,11 +116,12 @@ export class ObjectState {
   }
 
   async createNode(key: string, data: any, parent: number | undefined): Promise<StateNode | undefined> {
-
     try {
       return await this.db.transaction('rw', this.db.stateNodes, async () => {
         if (parent === undefined) {
+          // Root node creation
           if (this.root !== undefined) return undefined;
+
           const newNodeId = await this.db.set({
             id: this.autoincrement,
             key: 'root',
@@ -127,15 +129,16 @@ export class ObjectState {
             right: undefined,
             parent: undefined,
             data: undefined,
+            marker: this.autoincrement
           });
 
           const newNode = await this.db.get(newNodeId);
-
           this.root = this.autoincrement;
           this.autoincrement++;
           return newNode;
         }
 
+        // Regular node creation with parent
         let parentNode = await this.db.get(parent);
         if (parentNode === undefined) return undefined;
 
@@ -146,11 +149,16 @@ export class ObjectState {
           right: undefined,
           parent: parent,
           data: data,
+          marker: this.autoincrement
         });
 
         const newNode_1 = await this.db.get(this.autoincrement);
-
         this.autoincrement++;
+
+        // Update parent's marker to reflect child addition
+        await this.updateMarker(parent);
+
+        // Add to parent's left or right chain
         if (parentNode.left === undefined) {
           parentNode.left = newNode_1?.id!;
         } else {
@@ -166,6 +174,19 @@ export class ObjectState {
       });
     } catch (err: any) {
       return Promise.reject(err.message);
+    }
+  }
+
+  async updateMarker(nodeId: number | undefined) {
+    while (nodeId !== undefined) {
+      const node = await this.db.get(nodeId);
+      if (node) {
+        node.marker = this.autoincrement;
+        await this.db.set(node);
+        nodeId = node.parent;
+      } else {
+        break;
+      }
     }
   }
 
@@ -207,7 +228,6 @@ export class ObjectState {
         const node = await this.db.get(id);
         if (!node) return;
 
-        // Recursively delete all left descendants
         let leftChildId = node.left;
         while (leftChildId) {
           const leftChild = await this.db.get(leftChildId);
@@ -219,19 +239,16 @@ export class ObjectState {
           }
         }
 
-        // Remove the node if it has no parent (it's the root)
         if (node.parent === undefined) {
           await this.db.remove(id);
           this.root = undefined;
         } else {
-          // Update the parent's left reference if necessary
           const parentNode = await this.db.get(node.parent);
           if (parentNode && parentNode.left === id) {
             await this.db.remove(id);
             parentNode.left = node.right;
             await this.db.set(parentNode);
           } else {
-            // Find and update the sibling that points to this node
             let siblingId = parentNode?.left;
             while (siblingId) {
               const siblingNode = await this.db.get(siblingId);
@@ -245,23 +262,24 @@ export class ObjectState {
             await this.db.remove(id);
           }
         }
+
+        await this.updateMarker(node.parent); // Update parent markers
       });
     } catch (err) {
       console.error('Failed to delete node with id:', id, err);
-      throw err; // Rethrow the error to be handled by the caller
+      throw err;
     }
   }
 
 
   async updateNode(id: number, updates: { left?: number; right?: number; parent?: number; }): Promise<StateNode | undefined> {
     try {
-      // Access the node by its ID and update the necessary properties
       return await this.db.transaction('rw', this.db.stateNodes, async () => {
         let node = await this.db.get(id);
         if (node) {
-          // Update the node's properties with the provided updates
-          node = { ...node, ...updates };
+          node = { ...node, ...updates, marker: this.autoincrement }; // Update marker
           await this.db.update(node);
+          await this.updateMarker(node.parent); // Propagate marker update
           return await this.db.get(id);
         } else {
           throw new Error(`Node with ID ${id} not found`);
