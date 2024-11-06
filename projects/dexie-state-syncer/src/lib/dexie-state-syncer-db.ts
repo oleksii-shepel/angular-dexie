@@ -32,11 +32,9 @@ export class StateObjectDatabase extends Dexie {
     return await this.stateNodes.clear();
   }
 
-  async populate() {
+  async populate() {}
 
-  }
-
-  async get(key: number): Promise<StateNode | undefined>  {
+  async get(key: number): Promise<StateNode | undefined> {
     return this.stateNodes.get(key);
   }
 
@@ -88,15 +86,20 @@ export class ObjectState {
   }
 
   async descriptor(): Promise<StateDescriptor> {
-    return { autoincrement: this.autoincrement, root: await this.rootNode(), date: Date.now(), state: this,
+    return {
+      autoincrement: this.autoincrement,
+      root: await this.rootNode(),
+      date: Date.now(),
+      state: this,
       reader: {
         get: (path) => this.get(Array.isArray(path) ? path.join('.') : path),
-        find: (path) => this.find(Array.isArray(path) ? path.join('.') : path)
+        find: (path) => this.find(Array.isArray(path) ? path.join('.') : path),
       },
       writer: {
         initialize: (obj) => this.initialize(obj),
-        update: (path, value) => this.update(Array.isArray(path) ? path.join('.') : path, value),
-      }
+        update: (path, value) =>
+          this.update(Array.isArray(path) ? path.join('.') : path, value),
+      },
     };
   }
 
@@ -143,21 +146,31 @@ export class ObjectState {
     }
   }
 
-  async createNode(key: string, data: any, parent: number | undefined): Promise<StateNode | undefined> {
+  async createNode(
+    key: string,
+    data: any,
+    parent: number | undefined
+  ): Promise<StateNode | undefined> {
     try {
       return await this.db.transaction('rw', this.db.stateNodes, async () => {
         let nodeData = data;
 
         // If the parent node has `data` as an array, we handle it accordingly
-        const parentNode = parent !== undefined ? await this.db.get(parent) : await this.rootNode();
+        const parentNode =
+          parent !== undefined
+            ? await this.db.get(parent)
+            : await this.rootNode();
 
         // Check if the parent node's `data` is an array
         if (Array.isArray(data)) {
           // If data is an array, check if all elements are primitive.
           // If yes, we can store the array directly in `nodeData`.
-          nodeData = Array.isArray(data) && data.length !== 0 && data.every(item => typeof item !== 'object' || item === null)
-                      ? data
-                      : []; // Otherwise, store as an empty array to handle nested structures.
+          nodeData =
+            Array.isArray(data) &&
+            data.length !== 0 &&
+            data.every((item) => typeof item !== 'object' || item === null)
+              ? data
+              : []; // Otherwise, store as an empty array to handle nested structures.
         } else if (typeof data === 'object') {
           nodeData = {}; // Default to empty object if `data` is a complex object.
         }
@@ -241,7 +254,10 @@ export class ObjectState {
 
           while (currentChild !== undefined) {
             children.push(currentChild);
-            currentChild = currentChild.right !== undefined ? await this.db.get(currentChild.right) : undefined;
+            currentChild =
+              currentChild.right !== undefined
+                ? await this.db.get(currentChild.right)
+                : undefined;
           }
 
           return children;
@@ -305,45 +321,49 @@ export class ObjectState {
 
   async getData(node: StateNode): Promise<any> {
     try {
-        return await this.db.transaction('r', this.db.stateNodes, async () => {
-            if (!node) {
-                throw new Error("Tree node cannot be undefined");
+      return await this.db.transaction('r', this.db.stateNodes, async () => {
+        if (!node) {
+          throw new Error('Tree node cannot be undefined');
+        }
+
+        // Directly return primitive arrays if stored in data
+        if (
+          Array.isArray(node.data) &&
+          node.data.length !== 0 &&
+          node.data.every((item) => typeof item !== 'object' || item === null)
+        ) {
+          return node.data;
+        }
+
+        // Determine whether the node should be processed as an array or an object
+        let isArray = Array.isArray(node.data);
+        let data: any = isArray ? [] : {};
+
+        // Use getChildNodes to retrieve all child nodes
+        const children = await this.getChildNodes(node.id!);
+
+        if (children) {
+          if (isArray) {
+            // Populate array for compound array nodes
+            for (const child of children) {
+              data.push(await this.getData(child)); // Recursively get each child's data
             }
-
-            // Directly return primitive arrays if stored in data
-            if (Array.isArray(node.data) && node.data.length !== 0 && node.data.every(item => typeof item !== 'object' || item === null)) {
-                return node.data;
+          } else {
+            // Populate object for regular object structures
+            for (const child of children) {
+              data[child.key] = await this.getData(child); // Recursively assign each child's data
             }
+          }
+        } else {
+          // If no children, use the node's own data
+          data = node.data;
+        }
 
-            // Determine whether the node should be processed as an array or an object
-            let isArray = Array.isArray(node.data);
-            let data: any = isArray ? [] : {};
-
-            // Use getChildNodes to retrieve all child nodes
-            const children = await this.getChildNodes(node.id!);
-
-            if (children) {
-                if (isArray) {
-                    // Populate array for compound array nodes
-                    for (const child of children) {
-                        data.push(await this.getData(child)); // Recursively get each child's data
-                    }
-                } else {
-                    // Populate object for regular object structures
-                    for (const child of children) {
-                        data[child.key] = await this.getData(child); // Recursively assign each child's data
-                    }
-                }
-            } else {
-                // If no children, use the node's own data
-                data = node.data;
-            }
-
-            return data;
-        });
+        return data;
+      });
     } catch (err: any) {
-        console.error('Error fetching data:', err);
-        return Promise.reject(err.message);
+      console.error('Error fetching data:', err);
+      return Promise.reject(err.message);
     }
   }
 
@@ -363,7 +383,11 @@ export class ObjectState {
         let queue = [{ obj: obj, parent: root, previousSibling: undefined }];
 
         while (queue.length > 0) {
-          let { obj, parent, previousSibling } = queue.shift() as { obj: any; parent: number | undefined; previousSibling: number | undefined };
+          let { obj, parent, previousSibling } = queue.shift() as {
+            obj: any;
+            parent: number | undefined;
+            previousSibling: number | undefined;
+          };
           let firstChild: number | undefined = undefined;
 
           for (const key in obj) {
@@ -375,7 +399,9 @@ export class ObjectState {
             let nodeData = undefined;
             if (Array.isArray(value)) {
               // Check if it's an array of primitives
-              if (value.every(item => typeof item !== 'object' || item === null)) {
+              if (
+                value.every((item) => typeof item !== 'object' || item === null)
+              ) {
                 nodeData = value; // Store the array of primitives directly in data
               } else {
                 nodeData = []; // Store an empty array for complex objects, to process children
@@ -424,7 +450,11 @@ export class ObjectState {
               await this.db.set(record);
 
               // Enqueue the children for further processing
-              queue.push({ obj: value, parent: record.id, previousSibling: undefined });
+              queue.push({
+                obj: value,
+                parent: record.id,
+                previousSibling: undefined,
+              });
             }
           }
         }
@@ -446,10 +476,16 @@ export class ObjectState {
           const split = path.split('.');
 
           for (const part of split) {
-            let nextChild = node && node.left !== undefined ? await this.db.get(node.left) : undefined;
+            let nextChild =
+              node && node.left !== undefined
+                ? await this.db.get(node.left)
+                : undefined;
 
             while (nextChild !== undefined && nextChild.key !== part) {
-              nextChild = nextChild.right !== undefined ? await this.db.get(nextChild.right) : undefined;
+              nextChild =
+                nextChild.right !== undefined
+                  ? await this.db.get(nextChild.right)
+                  : undefined;
             }
 
             // If no matching child is found for this part, exit early
@@ -541,13 +577,19 @@ export class ObjectState {
 
           // Update the parent's child references only if the node is not the root
           // Explicitly check for null or undefined
-          const parent = (nodeToDelete.parent !== undefined) ? await this.db.get(nodeToDelete.parent) : undefined;
+          const parent =
+            nodeToDelete.parent !== undefined
+              ? await this.db.get(nodeToDelete.parent)
+              : undefined;
           if (parent) {
             if (parent.left === nodeToDelete.id) {
               parent.left = nodeToDelete.right;
               await this.db.set(parent); // Update the parent node in the database
             } else {
-              let current = parent.left !== undefined ? await this.db.get(parent.left) : undefined;
+              let current =
+                parent.left !== undefined
+                  ? await this.db.get(parent.left)
+                  : undefined;
               while (current?.right && current.right !== nodeToDelete.id) {
                 current = await this.db.get(current.right);
               }
@@ -567,8 +609,6 @@ export class ObjectState {
       throw err;
     }
   }
-
-
 
   async recursivelyDeleteSubtree(id: number | undefined) {
     try {
