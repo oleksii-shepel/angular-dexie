@@ -1,6 +1,5 @@
 {
   "$schema": "../../node_modules/ng-packagr/ng-package.schema.json",
-  "allowedNonPeerDependencies": ["@actioncrew/actionstack", "@actioncrew/streamix"],
   "dest": "../../dist/dexie-state-syncer",
   "lib": {
     "entryFile": "src/public-api.ts"
