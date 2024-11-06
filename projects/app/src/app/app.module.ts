@@ -8,10 +8,10 @@ import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 
 import { RouterModule, Routes } from '@angular/router';
-import { InMemoryObjectState } from 'dexie-state-syncer';
+import { InMemoryObjectState, ObjectState } from 'dexie-state-syncer';
 import { AppComponent } from './app.component';
 
-export const tree = new InMemoryObjectState();
+export const tree = new ObjectState();
 
 async function rootMetaReducer(reducer: AsyncReducer) {
   return async function (state: any, action: Action<any>) {

@@ -85,6 +85,9 @@ export class InMemoryObjectState {
 
   async rootNode(): Promise<StateNode> {
     try {
+      // Retrieve the node using the ID
+      this.root = await this.db.get(0);
+
       // If root is not yet set, create it
       if (!this.root) {
         const nodeId = await this.db.set({
@@ -97,8 +100,7 @@ export class InMemoryObjectState {
           marker: this.autoincrement,
         });
 
-        // After setting, retrieve the node using the ID
-        this.root = await this.db.get(nodeId);
+        this.root = await this.db.get(this.autoincrement);
 
         // Increment autoincrement after setting the root
         this.autoincrement++;
@@ -177,7 +179,7 @@ export class InMemoryObjectState {
           if (parentNode.left === undefined) {
             // If no children exist, set this new node as the first child
             parentNode.left = newNode?.id!;
-            await this.db.set(parentNode); // Save the updated parent
+            await this.db.update(parentNode); // Save the updated parent
           } else {
             // Traverse to the last sibling and link the new node as the right sibling
             let lastChild = await this.db.get(parentNode.left);
@@ -187,7 +189,7 @@ export class InMemoryObjectState {
 
             if (lastChild) {
               lastChild.right = newNode?.id!;
-              await this.db.set(lastChild); // Save the updated last child
+              await this.db.update(lastChild); // Save the updated last child
             }
           }
         }
@@ -205,7 +207,7 @@ export class InMemoryObjectState {
       const node = await this.db.get(nodeId);
       if (node) {
         node.marker = this.autoincrement;
-        await this.db.set(node);
+        await this.db.update(node);
         nodeId = node.parent;
       } else {
         break;
@@ -256,6 +258,7 @@ export class InMemoryObjectState {
         const node = await this.db.get(id);
         if (!node) return;
 
+        // Recursively delete the left child and its siblings
         let leftChildId = node.left;
         while (leftChildId) {
           const leftChild = await this.db.get(leftChildId);
@@ -267,28 +270,10 @@ export class InMemoryObjectState {
           }
         }
 
+        // Delete the node
+        await this.db.remove(id);
         if (node.parent === undefined) {
-          await this.db.remove(id);
-          this.root = undefined;
-        } else {
-          const parentNode = await this.db.get(node.parent);
-          if (parentNode && parentNode.left === id) {
-            await this.db.remove(id);
-            parentNode.left = node.right;
-            await this.db.set(parentNode);
-          } else {
-            let siblingId = parentNode?.left;
-            while (siblingId) {
-              const siblingNode = await this.db.get(siblingId);
-              if (siblingNode && siblingNode.right === id) {
-                siblingNode.right = node.right;
-                await this.db.set(siblingNode);
-                break;
-              }
-              siblingId = siblingNode?.right;
-            }
-            await this.db.remove(id);
-          }
+          this.root = undefined; // Handle the root case
         }
 
         await this.updateMarker(node.parent); // Update parent markers
@@ -404,14 +389,14 @@ export class InMemoryObjectState {
               const parentNode = await this.db.get(parent!);
               if (parentNode) {
                 parentNode.left = firstChild;
-                await this.db.set(parentNode);
+                await this.db.update(parentNode);
               }
             } else {
               // Set the right link for the previous sibling
               const prevSiblingNode = await this.db.get(previousSibling!);
               if (prevSiblingNode) {
                 prevSiblingNode.right = record.id;
-                await this.db.set(prevSiblingNode);
+                await this.db.update(prevSiblingNode);
               }
             }
 
@@ -427,7 +412,7 @@ export class InMemoryObjectState {
                 // For objects, store an empty object
                 record.data = {};
               }
-              await this.db.set(record);
+              await this.db.update(record);
 
               // Enqueue the children for further processing
               queue.push({
@@ -553,35 +538,36 @@ export class InMemoryObjectState {
           this.db.clear();
         } else {
           // Proceed with deleting the subtree
-          await this.recursivelyDeleteSubtree(nodeToDelete.left);
+          await this.deleteSubtree(nodeToDelete.left);
 
-          // Update the parent's child references only if the node is not the root
-          // Explicitly check for null or undefined
-          const parent =
-            nodeToDelete.parent !== undefined
-              ? await this.db.get(nodeToDelete.parent)
-              : undefined;
+          // Now, delete the node and update its parent's child reference
+          const parent = nodeToDelete.parent !== undefined
+            ? await this.db.get(nodeToDelete.parent)
+            : undefined;
+
           if (parent) {
+            // If the node is the left child of the parent
             if (parent.left === nodeToDelete.id) {
               parent.left = nodeToDelete.right;
-              await this.db.set(parent); // Update the parent node in the database
+              await this.db.update(parent); // Update the parent node in the database
             } else {
-              let current =
-                parent.left !== undefined
-                  ? await this.db.get(parent.left)
-                  : undefined;
+              // Find and update the sibling if the node is the right child
+              let current = parent.left !== undefined
+                ? await this.db.get(parent.left)
+                : undefined;
+
               while (current?.right && current.right !== nodeToDelete.id) {
                 current = await this.db.get(current.right);
               }
               if (current) {
                 current.right = nodeToDelete.right;
-                await this.db.set(current); // Update the current node in the database
+                await this.db.update(current); // Update the current node in the database
               }
             }
           }
         }
 
-        // Delete the node
+        // Finally, delete the node itself (recursively if needed)
         await this.deleteNode(nodeToDelete.id!);
       });
     } catch (err) {
@@ -590,27 +576,22 @@ export class InMemoryObjectState {
     }
   }
 
-  async recursivelyDeleteSubtree(id: number | undefined) {
+  async deleteSubtree(id: number | undefined) {
     try {
-      if (id === undefined) {
-        return;
-      }
+      if (id === undefined) return;
+
       const node = await this.db.get(id);
       if (node) {
-        // Recursively delete the left subtree (the left child and all its right siblings)
         let childId = node.left;
         while (childId !== undefined) {
           const childNode = await this.db.get(childId);
           if (childNode) {
-            // Recursively delete the left child of the current child node
+            // Recursively delete the left child
             if (childNode.left !== undefined) {
-              await this.recursivelyDeleteSubtree(childNode.left);
+              await this.deleteSubtree(childNode.left);
             }
-            // Save the right sibling ID before deleting the current child node
             const rightSiblingId = childNode.right;
-            // Delete the current child node
-            await this.deleteNode(childId);
-            // Move on to the right sibling
+            await this.deleteNode(childId); // Delete the current child node
             childId = rightSiblingId;
           }
         }
