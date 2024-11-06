@@ -24,7 +24,7 @@ export class AppComponent implements OnInit {
         c: 'asd',
         d: 'sadf',
         e : {
-          f: 'dfasdasdasd',
+          f: ['dfasdasdasd', 'sad'],
           g: 'gevrevre'
         }
       },
@@ -35,7 +35,7 @@ export class AppComponent implements OnInit {
     }));
 
     this.store.dispatch(updateTree('b', {
-      c: 'asd',
+      c: [{f: 'asd'}, {e:'sdsd'}],
       d: 'sadf',
       e : {
         f: 'dfasdasdasd',

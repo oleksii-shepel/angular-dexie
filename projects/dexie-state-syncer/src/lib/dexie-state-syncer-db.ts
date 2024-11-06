@@ -69,7 +69,7 @@ export interface StateWriter {
 
 export interface StateDescriptor {
   autoincrement: number;
-  root: number | undefined;
+  root: StateNode;
   date: number;
   reader: StateReader;
   writer: StateWriter;
@@ -78,7 +78,7 @@ export interface StateDescriptor {
 
 export class ObjectState {
   db: StateObjectDatabase;
-  root: number | undefined;
+  root: StateNode | undefined;
   autoincrement: number;
 
   constructor() {
@@ -87,8 +87,8 @@ export class ObjectState {
     this.autoincrement = 0;
   }
 
-  descriptor(): StateDescriptor {
-    return { autoincrement: this.autoincrement, root: this.root, date: Date.now(), state: this,
+  async descriptor(): Promise<StateDescriptor> {
+    return { autoincrement: this.autoincrement, root: await this.rootNode(), date: Date.now(), state: this,
       reader: {
         get: (path) => this.get(Array.isArray(path) ? path.join('.') : path),
         find: (path) => this.find(Array.isArray(path) ? path.join('.') : path)
@@ -100,8 +100,36 @@ export class ObjectState {
     };
   }
 
-  rootId(): number | undefined {
-    return this.root;
+  async rootNode(): Promise<StateNode> {
+    try {
+      // If root is not yet set, create it
+      if (!this.root) {
+        const nodeId = await this.db.set({
+          id: this.autoincrement,
+          key: 'root',
+          left: undefined,
+          right: undefined,
+          parent: undefined,
+          data: undefined,
+          marker: this.autoincrement,
+        });
+
+        // After setting, retrieve the node using the ID
+        this.root = await this.db.get(nodeId);
+
+        // Increment autoincrement after setting the root
+        this.autoincrement++;
+      }
+
+      if (!this.root) {
+        throw new Error('Failed to create or retrieve the root node');
+      }
+
+      return this.root;
+    } catch (err) {
+      console.error('Error in rootNode:', err);
+      throw err;
+    }
   }
 
   async leaf(id: number): Promise<boolean> {
@@ -118,61 +146,63 @@ export class ObjectState {
   async createNode(key: string, data: any, parent: number | undefined): Promise<StateNode | undefined> {
     try {
       return await this.db.transaction('rw', this.db.stateNodes, async () => {
-        if (parent === undefined) {
-          // Root node creation
-          if (this.root !== undefined) return undefined;
+        let nodeData = data;
 
-          const newNodeId = await this.db.set({
-            id: this.autoincrement,
-            key: 'root',
-            left: undefined,
-            right: undefined,
-            parent: undefined,
-            data: undefined,
-            marker: this.autoincrement
-          });
+        // If the parent node has `data` as an array, we handle it accordingly
+        const parentNode = parent !== undefined ? await this.db.get(parent) : await this.rootNode();
 
-          const newNode = await this.db.get(newNodeId);
-          this.root = this.autoincrement;
-          this.autoincrement++;
-          return newNode;
+        // Check if the parent node's `data` is an array
+        if (Array.isArray(data)) {
+          // If data is an array, check if all elements are primitive.
+          // If yes, we can store the array directly in `nodeData`.
+          nodeData = Array.isArray(data) && data.length !== 0 && data.every(item => typeof item !== 'object' || item === null)
+                      ? data
+                      : []; // Otherwise, store as an empty array to handle nested structures.
+        } else if (typeof data === 'object') {
+          nodeData = {}; // Default to empty object if `data` is a complex object.
         }
 
-        // Regular node creation with parent
-        let parentNode = await this.db.get(parent);
-        if (parentNode === undefined) return undefined;
-
-        const newNodeId_1 = await this.db.set({
+        // Create and store the new node in the database
+        const newNodeId = await this.db.set({
           id: this.autoincrement,
           key: key,
           left: undefined,
           right: undefined,
           parent: parent,
-          data: data,
-          marker: this.autoincrement
+          data: nodeData,
+          marker: this.autoincrement,
         });
 
-        const newNode_1 = await this.db.get(this.autoincrement);
+        const newNode = await this.db.get(newNodeId);
         this.autoincrement++;
 
-        // Update parent's marker to reflect child addition
-        await this.updateMarker(parent);
+        // Update the parent's marker to reflect changes
+        if (parent) await this.updateMarker(parent);
 
-        // Add to parent's left or right chain
-        if (parentNode.left === undefined) {
-          parentNode.left = newNode_1?.id!;
-        } else {
-          let siblingNode = await this.db.get(parentNode.left);
-          while (siblingNode !== undefined && siblingNode.right !== undefined) {
-            siblingNode = await this.db.get(siblingNode.right);
-          }
-          if (siblingNode !== undefined) {
-            siblingNode.right = newNode_1?.id!;
+        // Link new node into parent's left-right structure
+        if (parentNode) {
+          if (parentNode.left === undefined) {
+            // If no children exist, set this new node as the first child
+            parentNode.left = newNode?.id!;
+            await this.db.set(parentNode); // Save the updated parent
+          } else {
+            // Traverse to the last sibling and link the new node as the right sibling
+            let lastChild = await this.db.get(parentNode.left);
+            while (lastChild?.right) {
+              lastChild = await this.db.get(lastChild.right);
+            }
+
+            if (lastChild) {
+              lastChild.right = newNode?.id!;
+              await this.db.set(lastChild); // Save the updated last child
+            }
           }
         }
-        return newNode_1;
+
+        return newNode;
       });
     } catch (err: any) {
+      console.error('Error creating node:', err);
       return Promise.reject(err.message);
     }
   }
@@ -205,11 +235,13 @@ export class ObjectState {
       return await this.db.transaction('r', this.db.stateNodes, async () => {
         const node = await this.db.get(id);
 
-        if (node && node.left) {
-          let children = [], left = await this.db.get(node.left)!;
-          while (left?.right !== undefined) {
-            children.push(left);
-            left = await this.db.get(left.right)!;
+        if (node && node.left !== undefined) {
+          const children: StateNode[] = [];
+          let currentChild = await this.db.get(node.left);
+
+          while (currentChild !== undefined) {
+            children.push(currentChild);
+            currentChild = currentChild.right !== undefined ? await this.db.get(currentChild.right) : undefined;
           }
 
           return children;
@@ -271,97 +303,132 @@ export class ObjectState {
     }
   }
 
-
-  async updateNode(id: number, updates: { left?: number; right?: number; parent?: number; }): Promise<StateNode | undefined> {
-    try {
-      return await this.db.transaction('rw', this.db.stateNodes, async () => {
-        let node = await this.db.get(id);
-        if (node) {
-          node = { ...node, ...updates, marker: this.autoincrement }; // Update marker
-          await this.db.update(node);
-          await this.updateMarker(node.parent); // Propagate marker update
-          return await this.db.get(id);
-        } else {
-          throw new Error(`Node with ID ${id} not found`);
-        }
-      });
-    } catch (err) {
-      throw err;
-    }
-  }
-
   async getData(node: StateNode): Promise<any> {
     try {
-      return await this.db.transaction('r', this.db.stateNodes, async () => {
-        if (node === undefined) {
-          throw new Error("Tree node cannot be undefined");
-        }
+        return await this.db.transaction('r', this.db.stateNodes, async () => {
+            if (!node) {
+                throw new Error("Tree node cannot be undefined");
+            }
 
-        let data = node.left ? {} : node.data;
+            // Directly return primitive arrays if stored in data
+            if (Array.isArray(node.data) && node.data.length !== 0 && node.data.every(item => typeof item !== 'object' || item === null)) {
+                return node.data;
+            }
 
-        if (node.left !== undefined) {
-          let left = await this.db.get(node.left) as StateNode | undefined;
-          while (left !== undefined) {
-            data[left.key] = await this.getData(left);
-            left = left.right ? await this.db.get(left.right) : undefined;
-          }
-        }
+            // Determine whether the node should be processed as an array or an object
+            let isArray = Array.isArray(node.data);
+            let data: any = isArray ? [] : {};
 
-        return data;
-      });
+            // Use getChildNodes to retrieve all child nodes
+            const children = await this.getChildNodes(node.id!);
+
+            if (children) {
+                if (isArray) {
+                    // Populate array for compound array nodes
+                    for (const child of children) {
+                        data.push(await this.getData(child)); // Recursively get each child's data
+                    }
+                } else {
+                    // Populate object for regular object structures
+                    for (const child of children) {
+                        data[child.key] = await this.getData(child); // Recursively assign each child's data
+                    }
+                }
+            } else {
+                // If no children, use the node's own data
+                data = node.data;
+            }
+
+            return data;
+        });
     } catch (err: any) {
-      return Promise.reject(err.message);
+        console.error('Error fetching data:', err);
+        return Promise.reject(err.message);
     }
   }
-
 
   async initialize(obj: any): Promise<StateNode | undefined> {
     try {
       return await this.db.transaction('rw', this.db.stateNodes, async () => {
+        // Reset the database and state
         this.root = undefined;
         this.autoincrement = 0;
         await this.db.clear();
 
-        const rootNode = await this.createNode('root', undefined, undefined);
+        // Create the root node
+        const rootNode = await this.rootNode();
         const root = rootNode?.id;
 
+        // Initialize a queue to process each node
         let queue = [{ obj: obj, parent: root, previousSibling: undefined }];
 
         while (queue.length > 0) {
           let { obj, parent, previousSibling } = queue.shift() as { obj: any; parent: number | undefined; previousSibling: number | undefined };
-          let firstChild = undefined;
+          let firstChild: number | undefined = undefined;
 
           for (const key in obj) {
             const value = obj[key];
-            const record = await this.createNode(key, value, parent);
+
+            // Corrected handling for arrays:
+            // If it's an array of primitives, store it in `data`.
+            // Otherwise, treat it as a compound object and process its elements recursively.
+            let nodeData = undefined;
+            if (Array.isArray(value)) {
+              // Check if it's an array of primitives
+              if (value.every(item => typeof item !== 'object' || item === null)) {
+                nodeData = value; // Store the array of primitives directly in data
+              } else {
+                nodeData = []; // Store an empty array for complex objects, to process children
+              }
+            } else if (typeof value === 'object') {
+              nodeData = {}; // Store an empty object for further recursive processing
+            } else {
+              nodeData = value;
+            }
+
+            const record = await this.createNode(key, nodeData, parent);
+
             if (!record) {
               throw new Error('Failed to create a node');
             }
 
+            // Set the first child for the parent node
             if (!firstChild) {
               firstChild = record.id;
-              // Retrieve the parent node from the database, update it, and save it back
-              let parentNode = await this.db.get(parent!);
+              const parentNode = await this.db.get(parent!);
               if (parentNode) {
                 parentNode.left = firstChild;
                 await this.db.set(parentNode);
               }
             } else {
-              // Retrieve the previous sibling from the database, update it, and save it back
-              let prevSiblingNode = await this.db.get(previousSibling!);
+              // Set the right link for the previous sibling
+              const prevSiblingNode = await this.db.get(previousSibling!);
               if (prevSiblingNode) {
                 prevSiblingNode.right = record.id;
                 await this.db.set(prevSiblingNode);
               }
             }
 
+            // Update the previous sibling reference
             previousSibling = record.id;
 
-            if (typeof value === 'object') {
+            // For compound arrays and objects, enqueue children
+            if (Array.isArray(value) || typeof value === 'object') {
+              if (Array.isArray(value)) {
+                // Store an empty array for arrays with complex elements
+                record.data = [];
+              } else {
+                // For objects, store an empty object
+                record.data = {};
+              }
+              await this.db.set(record);
+
+              // Enqueue the children for further processing
               queue.push({ obj: value, parent: record.id, previousSibling: undefined });
             }
           }
         }
+
         return rootNode;
       });
     } catch (err) {
@@ -370,24 +437,30 @@ export class ObjectState {
     }
   }
 
-  async find(path: string): Promise<StateNode | undefined> {
+  async find(path: string | undefined): Promise<StateNode | undefined> {
     try {
       return await this.db.transaction('r', this.db.stateNodes, async () => {
-        let node = await this.db.get(this.root!);
+        let node = await this.rootNode();
 
-        if(typeof path === 'string' && path.length > 0) {
+        if (typeof path === 'string' && path.length > 0) {
           const split = path.split('.');
 
           for (const part of split) {
             let nextChild = node && node.left !== undefined ? await this.db.get(node.left) : undefined;
+
             while (nextChild !== undefined && nextChild.key !== part) {
               nextChild = nextChild.right !== undefined ? await this.db.get(nextChild.right) : undefined;
             }
-            return nextChild;
+
+            // If no matching child is found for this part, exit early
+            if (!nextChild) return undefined;
+
+            // Move to the found child node and continue with the next path part
+            node = nextChild;
           }
         }
 
-        return node;
+        return node; // Return the last found node, or the root node if no path was provided
       });
     } catch (err: any) {
       return Promise.reject(err.message);
@@ -405,55 +478,34 @@ export class ObjectState {
     }
   }
 
-  async create(obj: any, path: string): Promise<any> {
+  async create(path: string, obj: any): Promise<StateNode | undefined> {
     try {
       return await this.db.transaction('rw', this.db.stateNodes, async () => {
-        let node = undefined;
-        if (this.root === undefined) {
-          // Create a new root node if none exists
-          node = await this.createNode('root', undefined, undefined);
-          this.root = node!.id; // Set the new node as the root
-        } else {
-          // Fetch the existing root node
-          node = await this.db.get(this.root);
+        // Find the parent node based on path (or use root node if not found)
+        const parentPath = path.substring(0, path.lastIndexOf('.'));
+        let parentNode = await this.find(parentPath);
+
+        if (!parentNode) {
+          console.error(`Parent node not found for path: ${parentPath}`); // Log the parent path
+          // Optionally create the parent node if it doesn't exist
+          // parentNode = await this.createNode(parentPath, {}, undefined); // Uncomment if needed
+          return;
         }
 
-        if (typeof path === 'string' && path.length > 0) {
-          const split = path.split('.');
+        // Create the new node for the current key-value pair
+        const nodeKey = path.substring(path.lastIndexOf('.') + 1);
+        await this.createNode(nodeKey, obj, parentNode.id);
 
-          let parent = node;
-          for (const part of split) {
-            let child = parent && parent.left ? await this.db.get(parent.left) : undefined;
-            let nextChild = child;
-
-            while (nextChild && nextChild.key !== part) {
-              nextChild = nextChild.right ? await this.db.get(nextChild.right) : undefined;
-            }
-
-            if (!nextChild) {
-              nextChild = parent ? await this.createNode(part, undefined, parent.id) : undefined;
-              parent = nextChild; // Update the parent reference
-            }
-          }
-
-          let queue = [{ obj: obj, parent: parent ? parent.id : undefined }];
-          while (queue.length > 0) {
-            const { obj: currentObj, parent: parentId } = queue.shift()!;
-            if (typeof currentObj === 'object' && currentObj !== null) {
-              for (const key in currentObj) {
-                if (currentObj.hasOwnProperty(key)) {
-                  const value = currentObj[key];
-                  const record = parentId !== undefined ? await this.createNode(key, value, parentId) : undefined;
-
-                  if (typeof value === 'object' && value !== null && record) {
-                    queue.push({ obj: value, parent: record.id });
-                  }
-                }
-              }
+        if (typeof obj === 'object') {
+          // Iterate over the keys of the obj and create child nodes recursively
+          for (const key in obj) {
+            if (obj.hasOwnProperty(key)) {
+              await this.create(path + '.' + key, obj[key]); // Recurse to create nested nodes
             }
           }
         }
-        return node;
+
+        return parentNode; // Return the parent node after all children are created
       });
     } catch (err) {
       console.error('Failed to create node:', err);
@@ -461,12 +513,11 @@ export class ObjectState {
     }
   }
 
-
   async update(path: string, obj: any) {
     try {
       return await this.db.transaction('rw', this.db.stateNodes, async () => {
         await this.delete(path);
-        return await this.create(obj, path);
+        return await this.create(path, obj);
       });
     } catch (err: any) {
       return Promise.reject(err.message);
@@ -480,8 +531,10 @@ export class ObjectState {
         if (!nodeToDelete) return;
 
         // If the node to delete is the root, set the root to undefined
-        if (this.root === nodeToDelete.id) {
+        if (this.root === nodeToDelete) {
           this.root = undefined;
+          this.autoincrement = 0;
+          this.db.clear();
         } else {
           // Proceed with deleting the subtree
           await this.recursivelyDeleteSubtree(nodeToDelete.left);
@@ -514,6 +567,8 @@ export class ObjectState {
       throw err;
     }
   }
+
+
 
   async recursivelyDeleteSubtree(id: number | undefined) {
     try {
